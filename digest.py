@@ -154,10 +154,12 @@ Maksimal {MAX_NEWS} per kelompok. summary = 1 kalimat Bahasa Indonesia, maksimal
             pick(out, "tech", news_tech, "summary", MAX_NEWS))
 
 
-def rank_jobs(jobs: list[dict], cfg: dict) -> list[dict]:
+def rank_jobs(jobs: list[dict], cfg: dict, prefs: str = "") -> list[dict]:
+    taste = (f"\nRiwayat pilihan kandidat (pakai sebagai sinyal selera, bukan aturan mutlak):\n{prefs}\n"
+             if prefs else "")
     prompt = f"""Kamu menyaring lowongan untuk kandidat ini:
 {PROFILE}
-
+{taste}
 Kandidat lowongan (sudah difilter: baru, bukan senior, lokasi cocok):
 {brief(jobs, ("title", "company", "location", "source", "snippet"))}
 
@@ -179,6 +181,7 @@ def open_db() -> sqlite3.Connection:
     db.execute("DELETE FROM seen WHERE sent_at < ?",
                ((datetime.now(timezone.utc) - timedelta(days=90)).isoformat(),))
     db.commit()
+    tracker.init(db)  # jobs table + feedback column, read when ranking
     return db
 
 
@@ -247,8 +250,9 @@ def send_job_picker(db: sqlite3.Connection, env: dict, jobs: list[dict]) -> None
         return
     tracker.init(db)
     ids = [tracker.record(db, j) for j in jobs]
-    buttons = [[tg.button(f"Simpan {n}", f"sv:{jid}") for n, jid in enumerate(ids, 1)]]
-    tg.send(env, "Simpan lowongan ke tracker:", buttons)
+    buttons = [[tg.button(f"Simpan {n}", f"sv:{jid}") for n, jid in enumerate(ids, 1)],
+               [tg.button(f"👎 {n}", f"nf:{jid}") for n, jid in enumerate(ids, 1)]]
+    tg.send(env, "Simpan ke tracker, atau 👎 kalau tidak cocok (dipakai untuk ranking berikutnya):", buttons)
 
 
 def notify_error(env: dict, msg: str) -> None:
@@ -290,7 +294,7 @@ def daily(env: dict, cfg: dict, db: sqlite3.Connection, now: datetime, dry_run: 
 
     try:
         news_id, news_tech = rank_news(news["id"], news["tech"], cfg)
-        jobs = rank_jobs(unseen, cfg) if unseen else []
+        jobs = rank_jobs(unseen, cfg, tracker.preferences(db)) if unseen else []
         llm_note = ""
     except RuntimeError as err:
         log.error("LLM gagal, pakai urutan terbaru tanpa ranking: %s", err)

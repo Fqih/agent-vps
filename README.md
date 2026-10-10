@@ -33,7 +33,8 @@ survivors against my CV and writes one line per pick.
 - application tracker: saved, applied, interview, offer, rejected; follow-up reminder after 7 days
 - company and interview brief generated when a job moves to applied or interview
 - daily mock interview question over 9 topics, graded 0-10 by the LLM, weak answers repeat sooner (spaced repetition)
-- weekly recap
+- 👎 button on each digest pick; saved/applied jobs and thumbs-down jobs are fed back into the ranking prompt as taste examples
+- weekly recap, including digest quality (jobs sent vs. used vs. thumbs-down)
 
 **Info bot**
 - morning news

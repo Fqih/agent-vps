@@ -82,6 +82,38 @@ class Tracker(unittest.TestCase):
         self.assertIn("Minggu ini dilamar: <b>1</b>", tracker.recap(self.db, NOW + timedelta(days=1)))
 
 
+class Feedback(unittest.TestCase):
+    def setUp(self):
+        self.db = db()
+        self.good = tracker.record(self.db, {"url": "https://x/a", "title": "AI Engineer", "company": "Acme"})
+        self.bad = tracker.record(self.db, {"url": "https://x/b", "title": "Sales AI", "company": "Spam"})
+        tracker.record(self.db, {"url": "https://x/c", "title": "Ignored", "company": "Nobody"})
+
+    def test_no_history_gives_empty_prompt(self):
+        self.assertEqual(tracker.preferences(db()), "")
+
+    def test_saved_and_thumbs_down_become_preferences(self):
+        tracker.set_status(self.db, self.good, "disimpan", NOW)
+        self.assertTrue(tracker.set_feedback(self.db, self.bad, -1))
+        self.assertFalse(tracker.set_feedback(self.db, 999, -1))
+        prefs = tracker.preferences(self.db)
+        self.assertIn("Disukai:\n- AI Engineer @ Acme", prefs)
+        self.assertIn("Tidak cocok:\n- Sales AI @ Spam", prefs)
+        self.assertNotIn("Ignored", prefs)
+
+    def test_recap_reports_hit_rate(self):
+        tracker.set_status(self.db, self.good, "dilamar", NOW)
+        tracker.set_feedback(self.db, self.bad, -1)
+        self.assertIn("3 lowongan dikirim: 1 dipakai, 1 tidak cocok", tracker.recap(self.db, datetime.now(timezone.utc)))
+
+    def test_picker_has_thumbs_down_row(self):
+        import digest
+        sent = {}
+        with mock.patch.object(digest.tg, "send", lambda env, text, buttons=None: sent.update(b=buttons)):
+            digest.send_job_picker(self.db, {}, [{"url": "https://x/a"}, {"url": "https://x/b"}])
+        self.assertEqual([b["callback_data"] for b in sent["b"][1]], [f"nf:{self.good}", f"nf:{self.bad}"])
+
+
 class Monitor(unittest.TestCase):
     def test_alert_after_two_failures_then_recovery(self):
         conn = db()

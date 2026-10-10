@@ -155,6 +155,12 @@ def jobs_message(db: sqlite3.Connection, env: dict, text: str) -> None:
 
 
 def jobs_callback(db: sqlite3.Connection, env: dict, cq: dict) -> None:
+    nf = re.fullmatch(r"nf:(\d+)", cq.get("data", ""))
+    if nf:
+        ok = tracker.set_feedback(db, int(nf.group(1)), -1)
+        tg.call(env, "answerCallbackQuery", callback_query_id=cq["id"],
+                text="Dicatat: tidak cocok" if ok else "Tidak valid")
+        return
     m = re.fullmatch(r"(st|sv):(\d+):?(\w*)", cq.get("data", ""))
     action = (m.group(3) or "disimpan") if m else ""
     job = tracker.set_status(db, int(m.group(2)), action) if m else None

@@ -1,0 +1,15 @@
+[Unit]
+Description=Personal Telegram bot (job tracker, uptime and SSH alerts)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=agent
+WorkingDirectory=/home/agent/hermes_automation
+ExecStart=/usr/bin/python3 /home/agent/hermes_automation/infobot.py
+Restart=always
+RestartSec=15
+MemoryMax=150M
+
+[Install]
+WantedBy=multi-user.target

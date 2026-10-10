@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.sqlite
+*.sqlite-*
+.env
+*.env
+!.env.example
+worker/.wrangler/
+worker/node_modules/

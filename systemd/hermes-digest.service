@@ -1,0 +1,11 @@
+[Unit]
+Description=Hermes daily news and job digest
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=agent
+WorkingDirectory=/home/agent/hermes_automation
+ExecStart=/usr/bin/python3 /home/agent/hermes_automation/digest.py
+TimeoutStartSec=900

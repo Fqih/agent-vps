@@ -1,0 +1,15 @@
+name = "portfolio-visitor"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+routes = [
+  { pattern = "faqihhakim.tech/*", zone_name = "faqihhakim.tech" },
+  { pattern = "www.faqihhakim.tech/*", zone_name = "faqihhakim.tech" },
+]
+
+kv_namespaces = [
+  { binding = "VISITS", id = "d6aa06c9c4ce40a8855e34edd174fff1" },
+]
+
+# Secrets (set with `npx wrangler secret put`): TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID

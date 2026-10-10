@@ -1,0 +1,11 @@
+[Unit]
+Description=Hermes weekly Big 4 and BUMN job scan
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=agent
+WorkingDirectory=/home/agent/hermes_automation
+ExecStart=/usr/bin/python3 /home/agent/hermes_automation/digest.py --weekly
+TimeoutStartSec=2000

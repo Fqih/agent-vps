@@ -1,0 +1,7 @@
+[Unit]
+Description=Snapshot 9router and hermes SQLite databases
+
+[Service]
+Type=oneshot
+User=agent
+ExecStart=/usr/bin/python3 /home/agent/hermes_automation/backup.py

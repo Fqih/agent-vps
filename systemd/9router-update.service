@@ -1,0 +1,8 @@
+[Unit]
+Description=Update 9router to the newest tag (backup + rollback)
+After=docker.service db-backup.service
+
+[Service]
+Type=oneshot
+User=faqihhakim
+ExecStart=/home/faqihhakim/9router/update.sh

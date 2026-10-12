@@ -278,6 +278,8 @@ def scheduled(db: sqlite3.Connection, jobs: dict, info: dict, state: dict) -> No
         alerts = monitor.transitions(db, monitor.run_checks(db), now)
         if alerts:
             tg.send(info, "<b>Monitor</b>\n" + escape("\n".join(alerts)))
+        if info.get("HC_PING_URL"):  # dead man's switch: an outside service alerts when pings stop
+            monitor.check_url(info["HC_PING_URL"])
 
     if digest_missing(db, local) and once(db, "digest_alert", today):
         tg.send(info, "<b>Digest hari ini belum terkirim.</b> Cek ~/hermes_reports/execution.log")

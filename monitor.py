@@ -19,7 +19,7 @@ DEFAULT_SITES = {
     "9router": "http://127.0.0.1:20128",
     "headroom": "http://127.0.0.1:8787",
 }
-CONTAINERS = ("9router", "headroom")
+CONTAINERS = ("9router", "headroom", "cv-bot")
 SSH_ACCEPTED = re.compile(r"Accepted (\w+) for (\S+) from (\S+)")
 
 

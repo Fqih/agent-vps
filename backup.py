@@ -32,7 +32,8 @@ def verify(gz: Path) -> None:
     try:
         with gzip.open(gz, "rb") as fi, open(tmp, "wb") as fo:
             shutil.copyfileobj(fi, fo)
-        with sqlite3.connect(tmp) as db:
+        # immutable: read without creating -wal/-shm files next to the copy
+        with sqlite3.connect(f"file:{tmp}?immutable=1", uri=True) as db:
             result = db.execute("pragma quick_check").fetchone()[0]
         if result != "ok":
             raise sqlite3.DatabaseError(f"quick_check: {result}")

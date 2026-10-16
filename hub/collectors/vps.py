@@ -17,9 +17,9 @@ def _ram_percent(meminfo: Path) -> int:
 
 
 def _backup_ok(dest: Path, now: datetime) -> bool:
-    """A snapshot from today or yesterday (WIB) exists; the 03:00 run makes today's."""
+    """A complete backup run from today or yesterday (WIB); backup.py writes OK only when nothing failed."""
     day = now.astimezone(WIB).date()
-    return any(any((dest / d.isoformat()).glob("*.sqlite.gz")) for d in (day, day - timedelta(days=1)))
+    return any((dest / d.isoformat() / "OK").exists() for d in (day, day - timedelta(days=1)))
 
 
 def collect(ctx: dict, now: datetime) -> dict:

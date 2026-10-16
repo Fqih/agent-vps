@@ -25,19 +25,46 @@ def state_db():
 
 
 class Scheduled(unittest.TestCase):
-    def tick(self, db, soon=None, morning_text=None):
+    def tick(self, db, soon=None, morning_text=None, at=TICK, alerts=(), send_error=None, delivered=True):
         soon = soon or mock.Mock(return_value=([], None))
         morning_text = morning_text or mock.Mock(return_value="agenda")
-        with mock.patch.object(monitor, "now_utc", return_value=TICK), \
+        with mock.patch.object(monitor, "now_utc", return_value=at), \
                 mock.patch.object(monitor, "new_ssh_logins", return_value=([], 0)), \
                 mock.patch.object(monitor, "run_checks", return_value={}), \
+                mock.patch.object(monitor, "transitions", return_value=list(alerts)), \
                 mock.patch.object(monitor, "check_url") as ping, \
+                mock.patch.object(monitor, "domain_days_left", return_value=None), \
+                mock.patch.object(infobot, "background"), \
                 mock.patch("hub.morning.soon_events", soon), \
                 mock.patch("hub.morning.morning_text", morning_text), \
-                mock.patch("hub.notify.publish") as publish, \
-                mock.patch("tg.send"):
-            infobot.scheduled(db, INFO, INFO, {})
+                mock.patch("hub.notify.publish", return_value=delivered) as publish, \
+                mock.patch("tg.send", side_effect=send_error):
+            try:
+                infobot.scheduled(db, INFO, INFO, {})
+            except OSError:
+                pass  # a Telegram outage may abort the tick; what matters is what reached ntfy
         return ping, publish
+
+    def test_monitor_alert_reaches_ntfy_when_telegram_fails(self):
+        _, publish = self.tick(state_db(), alerts=["DOWN container:ntfy"], send_error=OSError("tg down"))
+        self.assertIn("alerts", [c.args[1] for c in publish.call_args_list])
+
+    def test_failed_morning_publish_is_retried(self):
+        db = state_db()
+        self.tick(db, delivered=False)
+        self.assertNotEqual(tracker.kv_get(db, "morning_push"), "2026-10-16")
+
+    def test_follow_up_goes_to_jobs_topic(self):
+        db = state_db()
+        jid = tracker.record(db, {"url": "https://x.test/1", "title": "Data Analyst", "company": "PT X",
+                                  "location": "Jakarta"})
+        db.execute("UPDATE jobs SET status = 'dilamar', next_remind = '2000-01-01' WHERE id = ?", (jid,))
+        db.commit()
+        noon = datetime(2026, 10, 16, 5, 0, tzinfo=timezone.utc)  # 12:00 WIB, inside DAYTIME
+        _, publish = self.tick(db, at=noon)
+        jobs = [c for c in publish.call_args_list if c.args[1] == "jobs"]
+        self.assertEqual(len(jobs), 1)
+        self.assertIn("PT X", jobs[0].args[3])
 
     def test_calendar_crash_still_pings_healthcheck(self):
         ping, _ = self.tick(state_db(), soon=mock.Mock(side_effect=KeyError("refresh_token")))

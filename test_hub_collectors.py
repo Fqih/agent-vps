@@ -74,9 +74,18 @@ class Collectors(unittest.TestCase):
         day = self.ctx["backups"] / "2026-10-16"
         day.mkdir(parents=True)
         (day / "9router.sqlite.gz").write_bytes(b"x")
+        (day / "OK").write_text("")
         out = vps.collect(self.ctx, NOW)
         self.assertEqual((out["ram"], out["down"], out["backup_ok"]), (60, ["container:cv-bot"], True))
         self.assertTrue(0 <= out["cpu"] <= 100 and 0 <= out["disk"] <= 100)
+
+    def test_vps_partial_backup_not_ok(self):
+        self.ctx["meminfo"].write_text("MemTotal:  2000000 kB\nMemAvailable:  800000 kB\n")
+        self.ctx["loadavg"].write_text("0.10 0 0 1/1 1\n")
+        day = self.ctx["backups"] / "2026-10-16"
+        day.mkdir(parents=True)
+        (day / "9router.sqlite.gz").write_bytes(b"x")  # run failed midway: no OK marker
+        self.assertFalse(vps.collect(self.ctx, NOW)["backup_ok"])
 
     def test_vps_backup_stale(self):
         self.ctx["meminfo"].write_text("MemTotal:  2000000 kB\nMemAvailable:  800000 kB\n")

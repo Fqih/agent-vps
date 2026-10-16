@@ -78,9 +78,15 @@ def main() -> int:
         shutil.rmtree(old)
     if failed:
         from digest import load_env  # only needed on failure
+        from hub import notify
         from tg import send
-        send(load_env(), f"<b>Backup VPS gagal</b> ({failed} item). Cek: journalctl -u db-backup")
-    return 1 if failed else 0
+        env = load_env()
+        notify.publish(env, "alerts", "Backup VPS gagal", f"{failed} item. Cek: journalctl -u db-backup",
+                       "high", fallback=False)
+        send(env, f"<b>Backup VPS gagal</b> ({failed} item). Cek: journalctl -u db-backup")
+        return 1
+    (day_dir / "OK").write_text("")  # the Hub widget trusts this marker, not the mere presence of files
+    return 0
 
 
 if __name__ == "__main__":

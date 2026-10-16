@@ -288,9 +288,9 @@ def scheduled(db: sqlite3.Connection, jobs: dict, info: dict, state: dict) -> No
     if now - state.get("last_check", datetime.min.replace(tzinfo=timezone.utc)) >= CHECK_EVERY:
         state["last_check"] = now
         alerts = monitor.transitions(db, monitor.run_checks(db), now)
-        if alerts:
-            tg.send(info, "<b>Monitor</b>\n" + escape("\n".join(alerts)))
+        if alerts:  # ntfy first: transitions() already stored the state, a Telegram error must not lose it
             notify.publish(info, "alerts", "Monitor", "\n".join(alerts), "high", fallback=False)
+            tg.send(info, "<b>Monitor</b>\n" + escape("\n".join(alerts)))
         if info.get("HC_PING_URL"):  # dead man's switch: an outside service alerts when pings stop
             monitor.check_url(info["HC_PING_URL"])
         try:  # Google trouble must never stop the rest of the schedule
@@ -313,12 +313,14 @@ def scheduled(db: sqlite3.Connection, jobs: dict, info: dict, state: dict) -> No
         except Exception:
             log.exception("morning summary")
         else:
-            if once(db, "morning_push", today):
-                notify.publish(info, "digest", "Pagi ini", text, "low")
+            if notify.publish(info, "digest", "Pagi ini", text, "low"):  # unmarked on failure, next tick retries
+                tracker.kv_set(db, "morning_push", today)
 
     if local.hour not in DAYTIME:
         return
     for job in tracker.due_reminders(db, now):
+        notify.publish(info, "jobs", "Waktunya follow-up", f"{job['title'] or '?'} | {job['company'] or '?'}",
+                       click=job["url"])
         text, buttons = tracker.card(job)
         tg.send(jobs, "Waktunya follow-up (7 hari sejak update terakhir):\n" + text, buttons)
     if once(db, "domain_check", today):

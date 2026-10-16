@@ -104,7 +104,7 @@ parameter present.
 
 ```
 android-widget/
-  settings.gradle.kts, build.gradle.kts, gradle/ (wrapper, libs.versions.toml)
+  settings.gradle.kts, build.gradle.kts, gradle/ (wrapper)
   app/src/main/
     AndroidManifest.xml
     java/.../hub/

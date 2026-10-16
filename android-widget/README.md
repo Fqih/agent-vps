@@ -24,7 +24,7 @@ apps" allowed for that app.
 
 1. Tailscale: connected; if split tunneling is on, include **Hub**.
 2. Open **Hub**, tap "Tempel dari clipboard" after copying the STATUS URL
-   from the ntfy message "URL widget KWGT", then "Tes koneksi", then
+   from the ntfy message "URL widget Hub" (how to send it: `../docs/widget.md`), then "Tes koneksi", then
    "Simpan".
 3. Long-press the home screen, Widgets, Hub, place it, resize to 4x2 or
    4x3+.

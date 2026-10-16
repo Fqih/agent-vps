@@ -69,7 +69,7 @@ private fun SettingsScreen(store: Store, done: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Hub widget", style = MaterialTheme.typography.headlineSmall)
-        Text("Tempel STATUS URL dari notifikasi ntfy \"URL widget\".", style = MaterialTheme.typography.bodyMedium)
+        Text("Tempel STATUS URL dari notifikasi ntfy \"URL widget Hub\".", style = MaterialTheme.typography.bodyMedium)
         OutlinedTextField(
             value = url, onValueChange = { url = it }, label = { Text("Status URL") },
             singleLine = true, visualTransformation = PasswordVisualTransformation(),

@@ -14,6 +14,7 @@ object StatusFetcher {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = timeoutMs
         conn.readTimeout = timeoutMs
+        conn.instanceFollowRedirects = false // a redirect could carry the token out of the tailnet
         try {
             when (val code = conn.responseCode) {
                 200 -> {

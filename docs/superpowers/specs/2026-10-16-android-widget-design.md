@@ -1,7 +1,7 @@
 # Hub home-screen widget (Android app)
 
 Date: 2026-10-16
-Status: draft, waiting for owner review
+Status: approved; look revised 2026-10-16 (frosted glass)
 
 ## Goal
 
@@ -51,25 +51,28 @@ users.
 
 ### Look
 
-Material You: colors follow the wallpaper (`GlanceTheme` dynamic colors),
-rounded corners, small stat cards. The status level colors one dot and the
-VPS line: ok green, warn amber, crit red; these three stay fixed so they
-mean the same thing on any wallpaper.
+Frosted glass (owner's choice, replaces Material You): a ~45% black layer
+with a thin light rim over the wallpaper, white text, neutral tiles. App
+widgets cannot blur what is behind them, so the look comes from alpha
+layers only. Only the status level pill and alarms use color: ok green,
+warn amber, crit red.
 
-Small layout (4x2):
+Glance `SizeMode.Responsive` picks one of three layouts from the height:
 
-```
-Hub  ● warn                 11:18  ⟳
-[ 4 baru ] [ 1 aktif ] [ 0 intv ]
-📅 10:00 Interview PT X        (or "Agenda kosong")
-CPU ██░░  RAM ███░  Disk █░░░   ✓ backup
-```
+| Size | From | Shows |
+|---|---|---|
+| Small | 110 dp | header, 3 job tiles, Load/RAM/Disk bars, backup line |
+| Medium | 330 dp | 5 job tiles, 2 agenda items, quota chips (5 h remaining), VPS bars |
+| Large (4x7) | 560 dp | adds 2 newest matches, 3 agenda items, last 3 tasks, quota rows (5 h and 7 day remaining, reset time), 6 h line charts for Load/RAM/Disk with current percent |
 
-Large layout (4x3 and up) adds: up to 3 agenda items, queue line
-(running / queued / failed), down checks list, 9router line
-(`ag 10/11 · cx 1/1 · gh 1/1`), follow-up due count.
+In the large layout the charts grow with any height above 560 dp (up to
+120 dp each), so a taller widget fills with chart instead of empty space.
+Glance containers hold at most 10 children, so each section is its own
+Column.
 
-Glance `SizeMode.Responsive` picks the layout from the widget size.
+Quota comes from `/status` `quota` (average remaining percent over active
+9router accounts per provider, refreshed every 15 minutes on the VPS).
+Chart samples come from `vps.history` (5-minute samples, last 6 hours).
 
 ### Tap targets
 

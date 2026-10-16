@@ -15,6 +15,7 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.actionStartActivity
@@ -32,6 +33,7 @@ import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.ContentScale
 import androidx.glance.layout.ColumnScope
 import androidx.glance.layout.Row
 import androidx.glance.layout.RowScope
@@ -62,14 +64,16 @@ class HubWidget : GlanceAppWidget() {
                 height >= MEDIUM.height -> Size.MEDIUM
                 else -> Size.SMALL
             }
-            Content(snap, size)
+            // LARGE content is sized for LARGE.height; the charts take whatever a taller widget adds.
+            val chart = if (size == Size.LARGE) (40 + (height - LARGE.height).value.toInt()).coerceIn(40, 120) else 0
+            Content(snap, size, chart)
         }
     }
 
     companion object {
         val SMALL = DpSize(250.dp, 110.dp)
-        val MEDIUM = DpSize(250.dp, 250.dp)
-        val LARGE = DpSize(250.dp, 430.dp)
+        val MEDIUM = DpSize(250.dp, 330.dp)
+        val LARGE = DpSize(250.dp, 560.dp)
     }
 }
 
@@ -106,7 +110,7 @@ private fun style(size: Int = 12, bold: Boolean = false, color: UnitColorProvide
     TextStyle(color = color, fontSize = size.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
 
 @Composable
-private fun Content(snap: Snapshot, size: Size) {
+private fun Content(snap: Snapshot, size: Size, chart: Int) {
     val status = snap.raw?.let { runCatching { Status.parse(it) }.getOrNull() }
     val setup = actionStartActivity<SettingsActivity>()
     val dashboard = snap.url?.let { open(UrlRules.dashboard(it)) } ?: setup
@@ -114,7 +118,7 @@ private fun Content(snap: Snapshot, size: Size) {
         Column(GlanceModifier.fillMaxSize().background(GLASS).cornerRadius(23.dp).padding(horizontal = 14.dp, vertical = 12.dp)) {
             Header(status, snap, dashboard)
             if (status != null && snap.url != null) {
-                Body(status, size, snap.bot?.let { open(it) } ?: dashboard, dashboard)
+                Body(status, size, chart, snap.bot?.let { open(it) } ?: dashboard, dashboard)
             } else {
                 Spacer(GlanceModifier.defaultWeight())
                 Text(
@@ -128,14 +132,15 @@ private fun Content(snap: Snapshot, size: Size) {
 }
 
 @Composable
-private fun ColumnScope.Body(status: Status, size: Size, jobsTap: Action, dashboard: Action) {
+private fun ColumnScope.Body(status: Status, size: Size, chart: Int, jobsTap: Action, dashboard: Action) {
     // Glance containers hold at most 10 children, so every section is its own Column.
+    // Heights: SMALL ~130 dp, MEDIUM ~300 dp, LARGE ~520 dp plus the chart height.
     Jobs(status.jobs, size, jobsTap)
-    Agenda(status.today, when (size) { Size.LARGE -> 4; Size.MEDIUM -> 2; Size.SMALL -> 1 }, size != Size.SMALL)
-    if (size != Size.SMALL) Tasks(status.queue, size == Size.LARGE)
+    if (size != Size.SMALL) Agenda(status.today, if (size == Size.LARGE) 3 else 2)
+    if (size == Size.LARGE) Tasks(status.queue)
+    if (size != Size.SMALL) QuotaSection(status.quota, detail = size == Size.LARGE)
     Spacer(GlanceModifier.defaultWeight())
-    Vps(status, size, dashboard)
-    if (size != Size.SMALL) Router(status.router)
+    if (size == Size.LARGE) VpsCharts(status, chart, dashboard) else Vps(status, size, dashboard)
 }
 
 @Composable
@@ -161,7 +166,11 @@ private fun Header(status: Status?, snap: Snapshot, onTap: Action) {
 }
 
 @Composable
-private fun Section(title: String, trailing: String = "", content: @Composable ColumnScope.() -> Unit) {
+private fun Section(title: String, trailing: String = "", titled: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+    if (!titled) {
+        Column(GlanceModifier.fillMaxWidth().padding(top = 8.dp), content = content)
+        return
+    }
     Column(GlanceModifier.fillMaxWidth()) {
         Spacer(GlanceModifier.height(8.dp))
         Box(GlanceModifier.fillMaxWidth().height(1.dp).background(LINE)) {}
@@ -177,7 +186,7 @@ private fun Section(title: String, trailing: String = "", content: @Composable C
 
 @Composable
 private fun Jobs(jobs: Jobs?, size: Size, onTap: Action) {
-    Section("JOBS") {
+    Section("JOBS", titled = size != Size.SMALL) {
         Row(GlanceModifier.fillMaxWidth().clickable(onTap)) {
             Tile(jobs?.newMatches, "baru")
             Gap()
@@ -194,7 +203,7 @@ private fun Jobs(jobs: Jobs?, size: Size, onTap: Action) {
             }
         }
         if (size == Size.LARGE) {
-            jobs?.topNew.orEmpty().take(3).forEach { m ->
+            jobs?.topNew.orEmpty().take(2).forEach { m ->
                 Spacer(GlanceModifier.height(3.dp))
                 Row(GlanceModifier.fillMaxWidth().clickable(onTap)) {
                     Text("•  ", style = style(12, color = FAINT))
@@ -221,8 +230,8 @@ private fun RowScope.Tile(value: Int?, label: String) {
 }
 
 @Composable
-private fun Agenda(today: Today?, max: Int, titled: Boolean) {
-    val body: @Composable ColumnScope.() -> Unit = {
+private fun Agenda(today: Today?, max: Int) {
+    Section("AGENDA HARI INI") {
         val items = today?.items.orEmpty()
         if (items.isEmpty()) {
             val text = when (today?.calendar) { null -> "–"; "off" -> "Kalender belum login"; else -> "Agenda kosong" }
@@ -236,15 +245,13 @@ private fun Agenda(today: Today?, max: Int, titled: Boolean) {
             }
         }
     }
-    if (titled) Section("AGENDA HARI INI", content = body) else Column(GlanceModifier.padding(top = 6.dp), content = body)
 }
 
 @Composable
-private fun Tasks(queue: Queue?, detail: Boolean) {
+private fun Tasks(queue: Queue?) {
     val counts = if (queue == null) "–" else "${queue.running} jalan · ${queue.queued} antri · ${queue.failed} gagal"
     Section("TASK", counts) {
         val rows = queue?.recent.orEmpty()
-        if (!detail) return@Section
         if (rows.isEmpty()) {
             Text("Belum ada task", style = style(12, color = MUTED))
         }
@@ -262,32 +269,73 @@ private fun Tasks(queue: Queue?, detail: Boolean) {
 @Composable
 private fun Vps(status: Status, size: Size, onTap: Action) {
     val v = status.vps
-    Section("VPS", if (size == Size.SMALL) "" else Format.vpsSummary(v?.uptimeDays, v?.load)) {
+    Section("VPS", backupText(v), titled = size != Size.SMALL) {
         Row(GlanceModifier.fillMaxWidth().clickable(onTap), verticalAlignment = Alignment.CenterVertically) {
-            Bar("CPU", v?.cpu)
+            Bar("Load", v?.cpu)
             Spacer(GlanceModifier.width(10.dp))
             Bar("RAM", v?.ram)
             Spacer(GlanceModifier.width(10.dp))
             Bar("Disk", v?.disk)
         }
-        if (size != Size.SMALL) {
-            Spacer(GlanceModifier.height(5.dp))
-            val backup = when (v?.backupOk) {
-                true -> "✓ backup ${v.backupAt ?: ""}".trim()
-                false -> "✗ backup gagal"
-                null -> "backup –"
-            }
-            Text(backup, style = style(11, color = if (v?.backupOk == false) CRIT else MUTED), maxLines = 1)
-            val down = v?.down.orEmpty()
-            if (down.isNotEmpty()) {
-                Text("⚠ ${down.joinToString(", ")}", style = style(11, color = levelColor(status.level)), maxLines = 1)
-            }
+        if (size == Size.SMALL) {
+            Spacer(GlanceModifier.height(4.dp))
+            Text(backupText(v), style = style(10, color = if (v?.backupOk == false) CRIT else MUTED), maxLines = 1)
         }
+        Down(status)
+    }
+}
+
+private fun backupText(v: Vps?) = when (v?.backupOk) {
+    true -> "✓ backup ${v.backupAt ?: ""}".trim()
+    false -> "✗ backup gagal"
+    null -> "backup –"
+}
+
+@Composable
+private fun Down(status: Status) {
+    val down = status.vps?.down.orEmpty()
+    if (down.isNotEmpty()) {
+        Text("⚠ ${down.joinToString(", ")}", style = style(11, color = levelColor(status.level)), maxLines = 1)
     }
 }
 
 @Composable
-private fun RowScope.Bar(label: String, percent: Int?) {
+private fun VpsCharts(status: Status, chartDp: Int, onTap: Action) {
+    val v = status.vps
+    val density = LocalContext.current.resources.displayMetrics.density
+    val widthDp = ((LocalSize.current.width.value - 28 - 20) / 3).coerceAtLeast(40f)
+    Section("VPS · 6 JAM", Format.vpsSummary(v?.uptimeDays, v?.load)) {
+        Row(GlanceModifier.fillMaxWidth().clickable(onTap)) {
+            ChartCell("Load", v?.cpu, v?.history?.cpu.orEmpty(), widthDp, chartDp, density)
+            Spacer(GlanceModifier.width(10.dp))
+            ChartCell("RAM", v?.ram, v?.history?.ram.orEmpty(), widthDp, chartDp, density)
+            Spacer(GlanceModifier.width(10.dp))
+            ChartCell("Disk", v?.disk, v?.history?.disk.orEmpty(), widthDp, chartDp, density)
+        }
+        Spacer(GlanceModifier.height(5.dp))
+        Text(backupText(v), style = style(11, color = if (v?.backupOk == false) CRIT else MUTED), maxLines = 1)
+        Down(status)
+    }
+}
+
+@Composable
+private fun RowScope.ChartCell(label: String, percent: Int?, samples: List<Int>, widthDp: Float, heightDp: Int, density: Float) {
+    val hot = (percent ?: 0) >= 90
+    val bitmap = Chart.bitmap(samples, (widthDp * density).toInt(), (heightDp * density).toInt(),
+        if (hot) 0xFFEF5350.toInt() else 0xE6FFFFFF.toInt())
+    Column(GlanceModifier.defaultWeight()) {
+        Row(GlanceModifier.fillMaxWidth()) {
+            Text(label, style = style(10, color = MUTED), modifier = GlanceModifier.defaultWeight())
+            Text(percent?.let { "$it%" } ?: "–", style = style(12, bold = true, color = if (hot) CRIT else TEXT))
+        }
+        Spacer(GlanceModifier.height(3.dp))
+        Image(ImageProvider(bitmap), contentDescription = "$label 6 jam", contentScale = ContentScale.FillBounds,
+            modifier = GlanceModifier.fillMaxWidth().height(heightDp.dp).background(TILE).cornerRadius(8.dp))
+    }
+}
+
+@Composable
+private fun RowScope.Bar(label: String, percent: Int?, alarm: Boolean = (percent ?: 0) >= 90) {
     Column(GlanceModifier.defaultWeight()) {
         Row(GlanceModifier.fillMaxWidth()) {
             Text(label, style = style(10, color = MUTED), modifier = GlanceModifier.defaultWeight())
@@ -297,23 +345,38 @@ private fun RowScope.Bar(label: String, percent: Int?) {
         LinearProgressIndicator(
             progress = (percent ?: 0) / 100f,
             modifier = GlanceModifier.fillMaxWidth().height(5.dp).cornerRadius(3.dp),
-            color = if ((percent ?: 0) >= 90) CRIT else BAR,
+            color = if (alarm) CRIT else BAR,
             backgroundColor = TILE,
         )
     }
 }
 
 @Composable
-private fun Router(router: Map<String, String>) {
-    Section("9ROUTER") {
-        Row(GlanceModifier.fillMaxWidth()) {
-            if (router.isEmpty()) Text("–", style = style(12, color = MUTED))
-            router.toSortedMap().entries.take(5).forEachIndexed { i, (provider, count) ->
-                if (i > 0) Spacer(GlanceModifier.width(6.dp))
-                Box(GlanceModifier.background(TILE).cornerRadius(8.dp).padding(horizontal = 8.dp, vertical = 3.dp)) {
-                    Text("$provider $count", style = style(11))
+private fun QuotaSection(quota: List<Quota>, detail: Boolean) {
+    Section("KUOTA 9ROUTER", if (detail) "sisa 5 jam · 7 hari" else "sisa 5 jam") {
+        if (quota.isEmpty()) Text("memuat…", style = style(12, color = MUTED))
+        if (detail) {
+            quota.forEach { q -> QuotaRow(q) }
+        } else {
+            Row(GlanceModifier.fillMaxWidth()) {
+                quota.forEachIndexed { i, q ->
+                    if (i > 0) Spacer(GlanceModifier.width(6.dp))
+                    Box(GlanceModifier.background(TILE).cornerRadius(8.dp).padding(horizontal = 8.dp, vertical = 3.dp)) {
+                        Text("${Format.quotaName(q)} ${q.session?.let { "$it%" } ?: "–"}", style = style(11))
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun QuotaRow(q: Quota) {
+    Row(GlanceModifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(Format.quotaName(q), style = style(12, bold = true), maxLines = 1, modifier = GlanceModifier.width(64.dp))
+        Bar("5 jam", q.session, alarm = (q.session ?: 100) <= 10)
+        Spacer(GlanceModifier.width(8.dp))
+        Bar("7 hari", q.weekly, alarm = (q.weekly ?: 100) <= 10)
+        Text(q.reset?.let { "  ↻$it" } ?: "", style = style(10, color = FAINT), maxLines = 1)
     }
 }

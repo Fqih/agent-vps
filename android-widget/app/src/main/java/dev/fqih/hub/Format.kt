@@ -37,6 +37,6 @@ object Format {
         listOfNotNull(uptimeDays?.let { "up $it hari" }, load?.let { "load %.2f".format(java.util.Locale.ROOT, it) })
             .joinToString(" · ")
 
-    fun router(map: Map<String, String>): String =
-        if (map.isEmpty()) "–" else map.toSortedMap().entries.joinToString(" · ") { "${it.key} ${it.value}" }
+    fun quotaName(q: Quota): String =
+        q.name.replaceFirstChar { it.uppercase() } + if (q.accounts > 1) " ×${q.accounts}" else ""
 }

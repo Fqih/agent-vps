@@ -48,8 +48,8 @@ class FormatTest {
     }
 
     @Test
-    fun routerSorted() {
-        assertEquals("ag 10/11 · cx 1/1 · gh 1/1", Format.router(mapOf("gh" to "1/1", "ag" to "10/11", "cx" to "1/1")))
-        assertEquals("–", Format.router(emptyMap()))
+    fun quotaNameShowsAccountCountWhenSeveral() {
+        assertEquals("Gemini ×11", Format.quotaName(Quota("gemini", 11, 100, 92, null)))
+        assertEquals("Claude", Format.quotaName(Quota("claude", 1, 57, 72, null)))
     }
 }

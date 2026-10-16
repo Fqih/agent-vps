@@ -55,6 +55,13 @@ class Token(unittest.TestCase):
         self.assertEqual(datetime.fromisoformat(saved["expiry"]), T0 + timedelta(hours=1))
         self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode), 0o600)
 
+    def test_concurrent_refresh_does_not_share_temp_file(self):
+        self.write(T0 + timedelta(minutes=2))
+        self.path.with_suffix(".tmp").mkdir()  # stands in for another process's temp file at the fixed name
+        with mock.patch("urllib.request.urlopen", return_value=FakeResp({"access_token": "new", "expires_in": 3600})):
+            self.assertEqual(google_auth.access_token(self.path, now=T0), "new")
+        self.assertEqual(json.loads(self.path.read_text())["access_token"], "new")
+
     def test_invalid_grant_raises_auth_error(self):
         self.write(T0)
         err = urllib.error.HTTPError("u", 400, "bad", {}, io.BytesIO(b'{"error": "invalid_grant"}'))

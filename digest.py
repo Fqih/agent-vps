@@ -39,7 +39,7 @@ ENV_FILES = [HOME / ".hermes" / "hermes.env", HOME / ".hermes" / ".env"]
 WIB = timezone(timedelta(hours=7))
 
 FALLBACK_MODELS = [m for m in os.environ.get("DIGEST_FALLBACK_MODELS", "ag/gemini-3.7-flash-high,gh/gpt-4.1-2025-04-14").split(",") if m]
-WEEKLY_MODELS = os.environ.get("DIGEST_WEEKLY_MODELS", "ag/gemini-3.1-pro-low,cc/claude-sonnet-5").split(",")
+WEEKLY_MODELS = os.environ.get("DIGEST_WEEKLY_MODELS", "ag/gemini-3.1-pro-low,cx/gpt-6.1-sol").split(",")
 MAX_JOBS = 5
 MAX_NEWS = 3
 TG_LIMIT = 3900

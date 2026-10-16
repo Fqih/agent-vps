@@ -10,6 +10,7 @@ import json
 import os
 import secrets
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -39,11 +40,12 @@ def _post(url: str, fields: dict) -> dict:
 
 
 def _save(token: dict, path: Path) -> None:
+    """Atomic write; the unique 0600 temp file keeps hub-status and infobot refreshing at once apart."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(token))
-    os.chmod(tmp, 0o600)
-    tmp.replace(path)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".")
+    with os.fdopen(fd, "w") as f:
+        f.write(json.dumps(token))
+    os.replace(tmp, path)
 
 
 def access_token(path=TOKEN_PATH, now: datetime | None = None) -> str:

@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import unittest
 import urllib.error
 from datetime import datetime, timedelta, timezone
@@ -91,6 +92,14 @@ class Chat(unittest.TestCase):
         self.assertEqual(seen[0].full_url, "http://router.test/v1/chat/completions")
         self.assertEqual(seen[0].get_header("Authorization"), "Bearer k")
         self.assertFalse(json.loads(seen[0].data.decode())["stream"])
+
+    def test_weekly_digest_default_avoids_claude_subscription(self):
+        import importlib
+        import digest
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DIGEST_WEEKLY_MODELS", None)
+            models = importlib.reload(digest).WEEKLY_MODELS
+        self.assertFalse(any(m.startswith("cc/") for m in models))
 
     def test_shipped_chains_avoid_claude_subscription(self):
         chains = llm.load_chains()

@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Hub</string>
+    <string name="widget_description">Status Hub: jobs, agenda, antrian, VPS</string>
+</resources>

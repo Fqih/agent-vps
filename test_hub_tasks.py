@@ -1,4 +1,8 @@
+import os
+import stat
+import tempfile
 import unittest
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from hub import tasks
@@ -11,6 +15,27 @@ def db():
 
 
 class Queue(unittest.TestCase):
+    def test_memory_db_creates_no_file(self):
+        cwd = os.getcwd()
+        os.chdir(tempfile.mkdtemp())
+        try:
+            tasks.connect(":memory:").close()
+            self.assertEqual(os.listdir("."), [])
+        finally:
+            os.chdir(cwd)
+
+    def test_db_files_private_to_owner(self):
+        path = Path(tempfile.mkdtemp()) / "tasks.sqlite"
+        old = os.umask(0o022)
+        try:
+            db = tasks.connect(path)
+            tasks.enqueue(db, "k", {"prompt": "rahasia"})
+            db.close()
+        finally:
+            os.umask(old)
+        for f in path.parent.glob("tasks.sqlite*"):
+            self.assertEqual(stat.S_IMODE(f.stat().st_mode), 0o600, f.name)
+
     def test_enqueue_roundtrip_unicode(self):
         conn = db()
         tid = tasks.enqueue(conn, "llm.prompt", {"prompt": "Lamar PT Ölçü 🎯"}, now=T0)

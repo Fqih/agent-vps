@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -38,6 +39,12 @@ def iso(dt: datetime) -> str:
 
 
 def connect(path=DB_PATH) -> sqlite3.Connection:
+    # prompts and results live here: owner-only; SQLite gives -wal/-shm the main file's mode
+    if str(path) != ":memory:":
+        Path(path).touch(mode=0o600, exist_ok=True)
+        for f in (Path(path), Path(f"{path}-wal"), Path(f"{path}-shm")):
+            if f.exists():
+                os.chmod(f, 0o600)
     db = sqlite3.connect(str(path), timeout=30, check_same_thread=False)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")

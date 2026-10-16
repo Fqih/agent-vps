@@ -9,7 +9,13 @@ from datetime import date
 from pathlib import Path
 
 HOME = Path.home()
-DBS = {"9router": HOME / "9router" / "data" / "db" / "data.sqlite", "hermes-state": HOME / ".hermes" / "state.db"}
+DBS = {
+    "9router": HOME / "9router" / "data" / "db" / "data.sqlite",
+    "hermes-state": HOME / ".hermes" / "state.db",
+    "jobs-state": HOME / "hermes_automation" / "state.sqlite",  # job tracker, read-later, monitor state
+    "tasks": HOME / "hermes_automation" / "tasks.sqlite",
+    "ntfy-users": HOME / "ntfy" / "data" / "user.db",
+}
 DEST = HOME / "backups"
 KEEP = 7
 # Non-DB files 9router needs to come back with the same identity and logins.

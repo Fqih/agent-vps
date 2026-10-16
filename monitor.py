@@ -19,7 +19,8 @@ DEFAULT_SITES = {
     "9router": "http://127.0.0.1:20128",
     "headroom": "http://127.0.0.1:8787",
 }
-CONTAINERS = ("9router", "headroom", "cv-bot")
+CONTAINERS = ("9router", "headroom", "cv-bot", "ntfy")
+HUB_UNITS = ("hub-worker", "hub-status")
 SSH_ACCEPTED = re.compile(r"Accepted (\w+) for (\S+) from (\S+)")
 
 
@@ -61,6 +62,10 @@ def system_checks() -> dict[str, tuple[bool, str]]:
             out[f"container:{c}"] = (c in running, "jalan" if c in running else "tidak jalan")
     except (OSError, subprocess.SubprocessError) as err:
         out["docker"] = (False, str(err)[:80])
+    for unit in HUB_UNITS:
+        state = subprocess.run(["systemctl", "is-active", unit], capture_output=True,
+                               text=True, timeout=20).stdout.strip()
+        out[f"unit:{unit}"] = (state == "active", state or "unknown")
     failed = subprocess.run(["systemctl", "--failed", "--no-legend", "--plain"], capture_output=True,
                             text=True, timeout=20).stdout.split("\n")
     units = [line.split()[0] for line in failed if line.strip()]

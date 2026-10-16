@@ -13,6 +13,7 @@ import re
 import sqlite3
 import threading
 import time
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from html import escape
 
@@ -22,6 +23,7 @@ import practice
 import readlater
 import tg
 import tracker
+from hub import morning, notify, status as hub_status, tasks
 from digest import DB_PATH, REPORT_DIR, WIB, jobs_env, load_env, model_config
 
 CHECK_EVERY = timedelta(minutes=5)
@@ -30,6 +32,7 @@ DAYTIME = range(8, 21)                     # WIB, no pings at night
 PRACTICE_HOUR = 9                          # daily interview question, WIB
 JOB_RECAP = (6, 19)                        # Sunday 19:00 WIB
 READ_RECAP = (5, 9)                        # Saturday 09:00 WIB
+MORNING_PUSH = (7, 5)                      # WIB, low-priority ntfy summary
 
 JOBS_HELP = """<b>Bot lamaran</b>
 /lamaran - lamaran aktif
@@ -44,7 +47,8 @@ Kirim link apa saja untuk disimpan + diringkas.
 /bacaan - daftar belum dibaca
 /status - status website &amp; VPS
 /pantau &lt;nama&gt; &lt;url&gt; - pantau website
-/lepas &lt;nama&gt; - berhenti memantau"""
+/lepas &lt;nama&gt; - berhenti memantau
+/tugas &lt;perintah&gt; - kerjakan di antrean, hasil lewat ntfy"""
 
 log = logging.getLogger("infobot")
 
@@ -208,6 +212,13 @@ def info_message(db: sqlite3.Connection, env: dict, text: str) -> None:
         db.execute("DELETE FROM checks WHERE name = ?", (f"site:{arg}",))
         db.commit()
         tg.send(env, f"Berhenti memantau {escape(arg)}")
+    elif cmd == "/tugas":
+        if not arg:
+            tg.send(env, "Format: /tugas &lt;perintah&gt;")
+            return
+        with closing(tasks.connect()) as tdb:
+            tid = tasks.enqueue(tdb, "llm.prompt", {"prompt": arg, "title": arg[:60]}, chain="heavy")
+        tg.send(env, f"Masuk antrean #{tid}. Hasilnya dikirim lewat ntfy.")
     else:
         tg.send(env, INFO_HELP)
 
@@ -267,6 +278,7 @@ def scheduled(db: sqlite3.Connection, jobs: dict, info: dict, state: dict) -> No
     now = monitor.now_utc()
     local = now.astimezone(WIB)
     today, week = local.date().isoformat(), local.strftime("%G-W%V")
+    hub_ctx = hub_status.make_ctx(info)
 
     alerts, offset = monitor.new_ssh_logins(int(tracker.kv_get(db, "auth_offset", "-1")))
     tracker.kv_set(db, "auth_offset", str(offset))
@@ -278,11 +290,22 @@ def scheduled(db: sqlite3.Connection, jobs: dict, info: dict, state: dict) -> No
         alerts = monitor.transitions(db, monitor.run_checks(db), now)
         if alerts:
             tg.send(info, "<b>Monitor</b>\n" + escape("\n".join(alerts)))
+            notify.publish(info, "alerts", "Monitor", "\n".join(alerts), "high", fallback=False)
+        events, cal_error = morning.soon_events(hub_ctx, now)
+        for ev in events:
+            if once(db, f"event_remind:{ev['id']}", ev["start"]):
+                notify.publish(info, "alerts", f"{ev['time']} {ev['title']}", "Mulai dalam 1 jam", "high")
+        if cal_error and once(db, "google_warn", today):
+            notify.publish(info, "jobs", "Login Google bermasalah",
+                           f"{cal_error}. Jalankan ulang connectors.google_auth login.")
         if info.get("HC_PING_URL"):  # dead man's switch: an outside service alerts when pings stop
             monitor.check_url(info["HC_PING_URL"])
 
     if digest_missing(db, local) and once(db, "digest_alert", today):
         tg.send(info, "<b>Digest hari ini belum terkirim.</b> Cek ~/hermes_reports/execution.log")
+
+    if (local.hour, local.minute) >= MORNING_PUSH and once(db, "morning_push", today):
+        notify.publish(info, "digest", "Pagi ini", morning.morning_text(hub_ctx, now), "low")
 
     if local.hour not in DAYTIME:
         return
@@ -318,7 +341,8 @@ def main() -> None:
         threading.Thread(target=poll, name="info", daemon=True, args=(
             "info", info, owner, info_message, info_callback,
             [("bacaan", "Belum dibaca"), ("status", "Status website & VPS"),
-             ("pantau", "Pantau website"), ("lepas", "Hapus pantauan")])).start()
+             ("pantau", "Pantau website"), ("lepas", "Hapus pantauan"),
+             ("tugas", "Kerjakan tugas di antrean")])).start()
     db, state = connect(), {}
     log.info("infobot jalan")
     while True:

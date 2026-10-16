@@ -45,10 +45,15 @@ memory (sub-project 3). Telegram stays the place for commands and chat.
 
 Model chains live in `hub/models.json`, not in code, so a model that starts
 working (or dies) is a one-line change. Antigravity Claude 4.6 models and
-the Claude subscription (`cc/`) are not used. Current chains:
+the Claude subscription (`cc/`) are not used, except that `bulk` spends the
+antigravity external quota (gpt-oss, Claude 4.6) on short structured work
+whose output the owner never reads directly. Before sub-project 1 relies on
+`bulk`, compare it with `ag/gemini-3.8-flash-high` on about 30 real job
+postings and drop it if the scores diverge. Current chains:
 
 | Chain | Order |
 |---|---|
+| `bulk` | `ag/gpt-oss-120b-medium`, `ag/claude-sonnet-4-6`, `ag/gemini-3.8-flash` |
 | `fast` | `ag/gemini-3.8-flash-high`, `ag/gemini-3.8-flash`, `cx/gpt-6-luna` |
 | `heavy` | `ag/gemini-3.1-pro-high`, `ag/gemini-3.8-flash-high`, `cx/gpt-6.1-sol`, `cx/gpt-6-luna` |
 
@@ -77,8 +82,7 @@ hermes_automation/
   connectors/
     google_auth.py  OAuth token load/refresh, one-time consent helper
     gcal.py         list_events(day), create_event(summary, start, end, description)
-  widget/
-    hub.kwgt        KWGT preset reading /status
+    (docs/widget.md: KWGT formulas reading /status)
 ```
 
 Data flow:
@@ -94,7 +98,7 @@ Data flow:
 
 - Publishes to the self-hosted ntfy server with a publisher token from
   `~/.hermes/hermes.env` (`NTFY_URL`, `NTFY_TOKEN`).
-- Topics: `alerts` (high), `jobs` (default), `digest` (low, silent).
+- Topics: `alerts` (high), `jobs` and `tasks` (default), `digest` (low, silent).
 - Priority mapping follows the agreed table: high = VPS/container down,
   backup failed, interview within 1 hour; default = artifact ready,
   follow-up due, task finished; low = morning summary, weekly recap.
@@ -129,10 +133,10 @@ CREATE TABLE tasks (
 - The worker runs one task at a time (1 vCPU, and quota is the limit, not
   CPU). It polls every 5 seconds when idle.
 - Retry: when every model in the chain fails, `attempts += 1` and
-  `run_after` moves by 1, 5, then 30 minutes. After the third failure the
-  task becomes `failed` and a default-priority notification is sent.
-- On start, tasks stuck in `running` for more than 15 minutes go back to
-  `queued`.
+  `run_after` moves by 1, 5, then 30 minutes. The fourth failure makes the
+  task `failed` and sends a default-priority notification.
+- There is one worker, so on start every task still in `running` was
+  orphaned by a crash and goes straight back to `queued`.
 - First handler, `llm.prompt`: payload `{prompt, title, notify}`; the result
   is sent through ntfy with a link to the dashboard task page. The info bot
   gets a `/tugas <prompt>` command that enqueues it, so the queue is useful
@@ -151,17 +155,22 @@ CREATE TABLE tasks (
   "updated": "2026-10-16T09:41:00+07:00",
   "level": "ok",
   "jobs":   {"new_matches": 3, "drafts": 0, "active": 12, "interview": 1, "followup_due": 2},
-  "today":  [{"time": "10:00", "title": "Interview PT X", "kind": "event"},
-             {"time": null, "title": "Follow-up Deloitte", "kind": "followup"}],
+  "today":  {"calendar": "ok",
+             "items": [{"time": "10:00", "title": "Interview PT X", "kind": "event"},
+                       {"time": null, "title": "Follow-up Deloitte", "kind": "followup"}]},
   "queue":  {"running": 1, "queued": 5, "failed": 0},
-  "vps":    {"cpu": 23, "ram": 61, "disk": 22, "containers_down": [], "backup_ok": true},
-  "router": {"ag": "10/10", "cx": "ok", "cc": "ok"}
+  "vps":    {"cpu": 23, "ram": 61, "disk": 22, "down": [], "backup_ok": true},
+  "router": {"ag": "11/11", "cx": "1/1", "gh": "1/1"}
 }
 ```
 
-- `level` is the worst of: any container down or backup failed = `crit`;
-  disk above 85%, RAM above 90%, a failed task, or Google login broken =
-  `warn`; otherwise `ok`.
+- `level` is the worst of: any container down or no backup from today or
+  yesterday = `crit`; disk above 85%, RAM above 90%, any other failing
+  monitor check, a failed task in the last 24 h, Google login broken, or a
+  collector error = `warn`; otherwise `ok`. `calendar: "off"` (never logged
+  in) is not a warning.
+- `vps.down` reuses the `checks` table that `monitor.py` already fills
+  every 5 minutes, so the status server runs no docker commands.
 - A collector that raises puts `{"error": "..."}` in its own section; the
   rest of the response is unaffected.
 - `drafts` stays 0 until sub-project 1 fills it.
@@ -190,11 +199,13 @@ CREATE TABLE tasks (
   `tailscale serve --tcp 8091`, cache and auth DB in `~/ntfy/`.
 - `auth-default-access: deny-all`; one publisher token for the Hub and one
   read token for the phone.
-- Added to `monitor.py` `CONTAINERS` and to the daily backup.
+- Added to `monitor.py` `CONTAINERS`; `ntfy/data/user.db` joins the daily
+  backup together with `tasks.sqlite` and `state.sqlite` (the job tracker
+  had no snapshot before this change).
 
 ### Widget
 
-- `widget/hub.kwgt` lays out the four rows agreed with the owner: jobs,
+- `docs/widget.md` explains how to build the four rows agreed with the owner: jobs,
   today, queue, VPS + 9router, plus the update time. KWGT refresh every
   15 minutes; tapping the jobs row opens the jobs bot, tapping the VPS row
   opens the dashboard.

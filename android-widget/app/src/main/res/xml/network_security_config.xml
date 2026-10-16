@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- hub-status is plain HTTP inside the tailnet. The config cannot express 100.64.0.0/10,
+     so cleartext is allowed here and UrlRules restricts which URL may ever be saved. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

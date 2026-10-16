@@ -8,11 +8,15 @@ import org.junit.Test
 class StatusTest {
     private val live = """
         {"updated":"2026-10-16T11:18:12+07:00",
-         "jobs":{"new_matches":4,"drafts":0,"active":1,"interview":0,"followup_due":0},
+         "jobs":{"new_matches":4,"drafts":2,"active":1,"interview":0,"followup_due":0,
+                 "top_new":[{"title":"Data Analyst","company":"PT A"},{"title":"BI","company":"PT B"}]},
          "today":{"items":[{"time":"10:00","title":"Interview PT X","kind":"event"},
                            {"time":null,"title":"Follow-up Y","kind":"followup"}],"calendar":"ok"},
-         "queue":{"running":0,"queued":2,"failed":1},
-         "vps":{"cpu":13,"ram":49,"disk":23,"down":["site:demo"],"backup_ok":true},
+         "queue":{"running":0,"queued":2,"failed":1,
+                  "recent":[{"title":"Ringkas","status":"done","model":"ag/gemini-3.8-flash"},
+                            {"title":"Draft","status":"queued","model":null}]},
+         "vps":{"cpu":13,"ram":49,"disk":23,"down":["site:demo"],"backup_ok":true,
+                "load":0.46,"uptime_days":7,"backup_at":"03:00"},
          "router":{"ag":"10/11","cx":"1/1","gh":"1/1"},
          "level":"warn"}
     """.trimIndent()
@@ -22,11 +26,11 @@ class StatusTest {
         val s = Status.parse(live)
         assertEquals("warn", s.level)
         assertEquals("2026-10-16T11:18:12+07:00", s.updated)
-        assertEquals(Jobs(4, 1, 0, 0), s.jobs)
+        assertEquals(Jobs(4, 2, 1, 0, 0, listOf(Match("Data Analyst", "PT A"), Match("BI", "PT B"))), s.jobs)
         assertEquals(listOf(Agenda("10:00", "Interview PT X"), Agenda(null, "Follow-up Y")), s.today!!.items)
         assertEquals("ok", s.today!!.calendar)
-        assertEquals(Queue(0, 2, 1), s.queue)
-        assertEquals(Vps(13, 49, 23, listOf("site:demo"), true), s.vps)
+        assertEquals(Queue(0, 2, 1, listOf(TaskRow("Ringkas", "done", "ag/gemini-3.8-flash"), TaskRow("Draft", "queued", null))), s.queue)
+        assertEquals(Vps(13, 49, 23, listOf("site:demo"), true, 0.46, 7, "03:00"), s.vps)
         assertEquals(mapOf("ag" to "10/11", "cx" to "1/1", "gh" to "1/1"), s.router)
     }
 
@@ -38,6 +42,16 @@ class StatusTest {
         assertNull(s.vps)
         assertEquals(emptyMap<String, String>(), s.router)
         assertEquals("crit", s.level)
+    }
+
+    @Test
+    fun olderServerWithoutDetailStillParses() {
+        val s = Status.parse("""{"level":"ok","jobs":{"new_matches":1},"queue":{"queued":1},"vps":{"cpu":5}}""")
+        assertEquals(emptyList<Match>(), s.jobs!!.topNew)
+        assertEquals(emptyList<TaskRow>(), s.queue!!.recent)
+        assertNull(s.vps!!.load)
+        assertNull(s.vps!!.uptimeDays)
+        assertNull(s.vps!!.backupAt)
     }
 
     @Test(expected = JSONException::class)

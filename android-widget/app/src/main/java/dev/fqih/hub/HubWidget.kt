@@ -10,9 +10,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalSize
@@ -32,7 +32,9 @@ import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.ColumnScope
 import androidx.glance.layout.Row
+import androidx.glance.layout.RowScope
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
@@ -47,20 +49,27 @@ import androidx.glance.unit.ColorProvider as UnitColorProvider
 import kotlinx.coroutines.flow.first
 
 class HubWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Responsive(setOf(SMALL, LARGE))
+    override val sizeMode = SizeMode.Responsive(setOf(SMALL, MEDIUM, LARGE))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val store = Store(context)
         val initial = store.snapshot.first()
         provideContent {
             val snap by store.snapshot.collectAsState(initial = initial)
-            GlanceTheme { Content(snap, large = LocalSize.current.height >= LARGE.height) }
+            val height = LocalSize.current.height
+            val size = when {
+                height >= LARGE.height -> Size.LARGE
+                height >= MEDIUM.height -> Size.MEDIUM
+                else -> Size.SMALL
+            }
+            Content(snap, size)
         }
     }
 
     companion object {
         val SMALL = DpSize(250.dp, 110.dp)
-        val LARGE = DpSize(250.dp, 220.dp)
+        val MEDIUM = DpSize(250.dp, 250.dp)
+        val LARGE = DpSize(250.dp, 430.dp)
     }
 }
 
@@ -73,154 +82,238 @@ class HubWidgetReceiver : GlanceAppWidgetReceiver() {
     }
 }
 
-// Level colors stay fixed so ok/warn/crit read the same on any wallpaper.
-private fun fixed(c: Color): UnitColorProvider = ColorProvider(day = c, night = c)
-private val OK = fixed(Color(0xFF43A047))
-private val WARN = fixed(Color(0xFFFFB300))
-private val CRIT = fixed(Color(0xFFE53935))
+private enum class Size { SMALL, MEDIUM, LARGE }
+
+// Frosted glass: neutral translucent layers over the wallpaper, white text. App widgets cannot blur
+// what is behind them, so the look comes from alpha only; colors are fixed and ignore Material You.
+private fun fixed(c: Long): UnitColorProvider = ColorProvider(day = Color(c), night = Color(c))
+private val GLASS = fixed(0x73000000)   // ~45% black
+private val EDGE = fixed(0x26FFFFFF)    // thin light rim
+private val TILE = fixed(0x1FFFFFFF)
+private val LINE = fixed(0x1AFFFFFF)
+private val TEXT = fixed(0xFFFFFFFF)
+private val MUTED = fixed(0xB3FFFFFF)
+private val FAINT = fixed(0x80FFFFFF)
+private val BAR = fixed(0xE6FFFFFF)
+private val OK = fixed(0xFF66BB6A)
+private val WARN = fixed(0xFFFFCA28)
+private val CRIT = fixed(0xFFEF5350)
 private fun levelColor(level: String) = when (level) { "ok" -> OK; "crit" -> CRIT; else -> WARN }
 
 private fun open(url: String): Action = actionStartActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 
-@Composable
-private fun body(size: Int = 13, bold: Boolean = false, color: UnitColorProvider = GlanceTheme.colors.onSurface) =
+private fun style(size: Int = 12, bold: Boolean = false, color: UnitColorProvider = TEXT) =
     TextStyle(color = color, fontSize = size.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
 
 @Composable
-private fun Content(snap: Snapshot, large: Boolean) {
+private fun Content(snap: Snapshot, size: Size) {
     val status = snap.raw?.let { runCatching { Status.parse(it) }.getOrNull() }
     val setup = actionStartActivity<SettingsActivity>()
     val dashboard = snap.url?.let { open(UrlRules.dashboard(it)) } ?: setup
-    Column(
-        GlanceModifier.fillMaxSize().background(GlanceTheme.colors.widgetBackground)
-            .cornerRadius(20.dp).padding(horizontal = 14.dp, vertical = 10.dp)
-    ) {
-        Header(status, snap, dashboard)
-        if (status != null && snap.url != null) {
-            Spacer(GlanceModifier.height(8.dp))
-            JobCards(status.jobs, snap.bot?.let { open(it) } ?: dashboard)
-            Spacer(GlanceModifier.height(8.dp))
-            AgendaLines(status.today, if (large) 3 else 1)
-            if (large) {
-                Spacer(GlanceModifier.height(6.dp))
-                Detail(status)
+    Box(GlanceModifier.fillMaxSize().background(EDGE).cornerRadius(24.dp).padding(1.dp)) {
+        Column(GlanceModifier.fillMaxSize().background(GLASS).cornerRadius(23.dp).padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Header(status, snap, dashboard)
+            if (status != null && snap.url != null) {
+                Body(status, size, snap.bot?.let { open(it) } ?: dashboard, dashboard)
+            } else {
+                Spacer(GlanceModifier.defaultWeight())
+                Text(
+                    if (snap.url == null) "Tap untuk tempel Status URL" else "Tekan ⟳ untuk memuat",
+                    style = style(13, color = MUTED), modifier = GlanceModifier.clickable(setup),
+                )
+                Spacer(GlanceModifier.defaultWeight())
             }
-            Spacer(GlanceModifier.defaultWeight())
-            VpsBars(status, dashboard)
-        } else {
-            Spacer(GlanceModifier.defaultWeight())
-            Text(
-                if (snap.url == null) "Tap untuk tempel Status URL" else "Tekan ⟳ untuk memuat",
-                style = body(color = GlanceTheme.colors.onSurfaceVariant),
-                modifier = GlanceModifier.clickable(setup),
-            )
-            Spacer(GlanceModifier.defaultWeight())
         }
     }
+}
+
+@Composable
+private fun ColumnScope.Body(status: Status, size: Size, jobsTap: Action, dashboard: Action) {
+    // Glance containers hold at most 10 children, so every section is its own Column.
+    Jobs(status.jobs, size, jobsTap)
+    Agenda(status.today, when (size) { Size.LARGE -> 4; Size.MEDIUM -> 2; Size.SMALL -> 1 }, size != Size.SMALL)
+    if (size != Size.SMALL) Tasks(status.queue, size == Size.LARGE)
+    Spacer(GlanceModifier.defaultWeight())
+    Vps(status, size, dashboard)
+    if (size != Size.SMALL) Router(status.router)
 }
 
 @Composable
 private fun Header(status: Status?, snap: Snapshot, onTap: Action) {
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Row(GlanceModifier.defaultWeight().clickable(onTap), verticalAlignment = Alignment.CenterVertically) {
-            Text("Hub", style = body(15, bold = true))
+            Text("HUB", style = style(15, bold = true))
             Spacer(GlanceModifier.width(8.dp))
             if (status != null) {
-                Box(GlanceModifier.size(8.dp).cornerRadius(4.dp).background(levelColor(status.level))) {}
-                Spacer(GlanceModifier.width(4.dp))
-                Text(status.level, style = body(12, color = levelColor(status.level)))
+                Box(GlanceModifier.background(levelColor(status.level)).cornerRadius(8.dp).padding(horizontal = 7.dp, vertical = 1.dp)) {
+                    Text(status.level.uppercase(), style = style(10, bold = true, color = fixed(0xFF000000)))
+                }
             }
         }
-        Text(
-            Format.header(status, snap.error, configured = snap.url != null),
-            style = body(12, color = GlanceTheme.colors.onSurfaceVariant), maxLines = 1,
-        )
+        Text(Format.header(status, snap.error, configured = snap.url != null), style = style(11, color = MUTED), maxLines = 1)
         Spacer(GlanceModifier.width(8.dp))
         Image(
             ImageProvider(R.drawable.ic_refresh), contentDescription = "Refresh",
+            colorFilter = ColorFilter.tint(TEXT),
             modifier = GlanceModifier.size(20.dp).clickable(actionRunCallback<RefreshAction>()),
         )
     }
 }
 
 @Composable
-private fun JobCards(jobs: Jobs?, onTap: Action) {
-    Row(GlanceModifier.fillMaxWidth().clickable(onTap)) {
-        Card(jobs?.newMatches, "baru")
-        Spacer(GlanceModifier.width(6.dp))
-        Card(jobs?.active, "aktif")
-        Spacer(GlanceModifier.width(6.dp))
-        Card(jobs?.interview, "interview")
+private fun Section(title: String, trailing: String = "", content: @Composable ColumnScope.() -> Unit) {
+    Column(GlanceModifier.fillMaxWidth()) {
+        Spacer(GlanceModifier.height(8.dp))
+        Box(GlanceModifier.fillMaxWidth().height(1.dp).background(LINE)) {}
+        Spacer(GlanceModifier.height(6.dp))
+        Row(GlanceModifier.fillMaxWidth()) {
+            Text(title, style = style(10, bold = true, color = FAINT), modifier = GlanceModifier.defaultWeight())
+            if (trailing.isNotEmpty()) Text(trailing, style = style(10, color = MUTED), maxLines = 1)
+        }
+        Spacer(GlanceModifier.height(4.dp))
+        Column(GlanceModifier.fillMaxWidth(), content = content) // own container: keeps each Column under 10 children
     }
 }
 
 @Composable
-private fun androidx.glance.layout.RowScope.Card(value: Int?, label: String) {
+private fun Jobs(jobs: Jobs?, size: Size, onTap: Action) {
+    Section("JOBS") {
+        Row(GlanceModifier.fillMaxWidth().clickable(onTap)) {
+            Tile(jobs?.newMatches, "baru")
+            Gap()
+            if (size != Size.SMALL) {
+                Tile(jobs?.drafts, "draft")
+                Gap()
+            }
+            Tile(jobs?.active, "aktif")
+            Gap()
+            Tile(jobs?.interview, "intv")
+            if (size != Size.SMALL) {
+                Gap()
+                Tile(jobs?.followupDue, "FU")
+            }
+        }
+        if (size == Size.LARGE) {
+            jobs?.topNew.orEmpty().take(3).forEach { m ->
+                Spacer(GlanceModifier.height(3.dp))
+                Row(GlanceModifier.fillMaxWidth().clickable(onTap)) {
+                    Text("•  ", style = style(12, color = FAINT))
+                    Text(m.title, style = style(12), maxLines = 1, modifier = GlanceModifier.defaultWeight())
+                    Text("  ${m.company}", style = style(11, color = MUTED), maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.Gap() = Spacer(GlanceModifier.width(6.dp))
+
+@Composable
+private fun RowScope.Tile(value: Int?, label: String) {
     Column(
-        GlanceModifier.defaultWeight().background(GlanceTheme.colors.secondaryContainer)
-            .cornerRadius(12.dp).padding(vertical = 6.dp),
+        GlanceModifier.defaultWeight().background(TILE).cornerRadius(12.dp).padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(value?.toString() ?: "–", style = body(18, bold = true, color = GlanceTheme.colors.onSecondaryContainer))
-        Text(label, style = body(11, color = GlanceTheme.colors.onSecondaryContainer))
+        Text(value?.toString() ?: "–", style = style(17, bold = true))
+        Text(label, style = style(10, color = MUTED))
     }
 }
 
 @Composable
-private fun AgendaLines(today: Today?, max: Int) {
-    val items = today?.items.orEmpty()
-    if (items.isEmpty()) {
-        val text = when (today?.calendar) { null -> "📅 –"; "off" -> "📅 Kalender belum login"; else -> "📅 Agenda kosong" }
-        Text(text, style = body(color = GlanceTheme.colors.onSurfaceVariant), maxLines = 1)
-        return
+private fun Agenda(today: Today?, max: Int, titled: Boolean) {
+    val body: @Composable ColumnScope.() -> Unit = {
+        val items = today?.items.orEmpty()
+        if (items.isEmpty()) {
+            val text = when (today?.calendar) { null -> "–"; "off" -> "Kalender belum login"; else -> "Agenda kosong" }
+            Text(text, style = style(12, color = MUTED), maxLines = 1)
+        } else {
+            items.take(max).forEach { item ->
+                Row(GlanceModifier.fillMaxWidth().padding(vertical = 1.dp)) {
+                    Text(item.time ?: "•", style = style(12, bold = true), modifier = GlanceModifier.width(44.dp))
+                    Text(item.title, style = style(12), maxLines = 1)
+                }
+            }
+        }
     }
-    items.take(max).forEach { item ->
-        Text("📅 ${item.time ?: "•"}  ${item.title}", style = body(), maxLines = 1)
+    if (titled) Section("AGENDA HARI INI", content = body) else Column(GlanceModifier.padding(top = 6.dp), content = body)
+}
+
+@Composable
+private fun Tasks(queue: Queue?, detail: Boolean) {
+    val counts = if (queue == null) "–" else "${queue.running} jalan · ${queue.queued} antri · ${queue.failed} gagal"
+    Section("TASK", counts) {
+        val rows = queue?.recent.orEmpty()
+        if (!detail) return@Section
+        if (rows.isEmpty()) {
+            Text("Belum ada task", style = style(12, color = MUTED))
+        }
+        rows.take(3).forEach { t ->
+            Row(GlanceModifier.fillMaxWidth().padding(vertical = 1.dp)) {
+                Text(Format.taskIcon(t.status), style = style(12, color = if (t.status == "failed") CRIT else MUTED),
+                    modifier = GlanceModifier.width(18.dp))
+                Text(t.title, style = style(12), maxLines = 1, modifier = GlanceModifier.defaultWeight())
+                Text("  ${Format.model(t.model)}", style = style(10, color = FAINT), maxLines = 1)
+            }
+        }
     }
 }
 
 @Composable
-private fun Detail(status: Status) {
-    val q = status.queue
-    val muted = GlanceTheme.colors.onSurfaceVariant
-    Text(
-        if (q == null) "⚙ –" else "⚙ ${q.running} jalan · ${q.queued} antri · ${q.failed} gagal" +
-            (status.jobs?.let { " · FU ${it.followupDue}" } ?: ""),
-        style = body(12, color = muted), maxLines = 1,
-    )
-    Text("🔌 ${Format.router(status.router)}", style = body(12, color = muted), maxLines = 1)
-    val down = status.vps?.down.orEmpty()
-    if (down.isNotEmpty()) {
-        Text("⚠ ${down.joinToString(", ")}", style = body(12, color = levelColor(status.level)), maxLines = 1)
-    }
-}
-
-@Composable
-private fun VpsBars(status: Status, onTap: Action) {
+private fun Vps(status: Status, size: Size, onTap: Action) {
     val v = status.vps
-    Row(GlanceModifier.fillMaxWidth().clickable(onTap), verticalAlignment = Alignment.CenterVertically) {
-        Bar("CPU", v?.cpu)
-        Spacer(GlanceModifier.width(8.dp))
-        Bar("RAM", v?.ram)
-        Spacer(GlanceModifier.width(8.dp))
-        Bar("Disk", v?.disk)
-        Spacer(GlanceModifier.width(8.dp))
-        Text(
-            when (v?.backupOk) { true -> "✓ bkp"; false -> "✗ bkp"; null -> "–" },
-            style = body(11, color = if (v?.backupOk == false) CRIT else GlanceTheme.colors.onSurfaceVariant),
-        )
+    Section("VPS", if (size == Size.SMALL) "" else Format.vpsSummary(v?.uptimeDays, v?.load)) {
+        Row(GlanceModifier.fillMaxWidth().clickable(onTap), verticalAlignment = Alignment.CenterVertically) {
+            Bar("CPU", v?.cpu)
+            Spacer(GlanceModifier.width(10.dp))
+            Bar("RAM", v?.ram)
+            Spacer(GlanceModifier.width(10.dp))
+            Bar("Disk", v?.disk)
+        }
+        if (size != Size.SMALL) {
+            Spacer(GlanceModifier.height(5.dp))
+            val backup = when (v?.backupOk) {
+                true -> "✓ backup ${v.backupAt ?: ""}".trim()
+                false -> "✗ backup gagal"
+                null -> "backup –"
+            }
+            Text(backup, style = style(11, color = if (v?.backupOk == false) CRIT else MUTED), maxLines = 1)
+            val down = v?.down.orEmpty()
+            if (down.isNotEmpty()) {
+                Text("⚠ ${down.joinToString(", ")}", style = style(11, color = levelColor(status.level)), maxLines = 1)
+            }
+        }
     }
 }
 
 @Composable
-private fun androidx.glance.layout.RowScope.Bar(label: String, percent: Int?) {
+private fun RowScope.Bar(label: String, percent: Int?) {
     Column(GlanceModifier.defaultWeight()) {
-        Text("$label ${percent?.let { "$it%" } ?: "–"}", style = body(10, color = GlanceTheme.colors.onSurfaceVariant))
+        Row(GlanceModifier.fillMaxWidth()) {
+            Text(label, style = style(10, color = MUTED), modifier = GlanceModifier.defaultWeight())
+            Text(percent?.let { "$it%" } ?: "–", style = style(10, bold = true))
+        }
+        Spacer(GlanceModifier.height(3.dp))
         LinearProgressIndicator(
             progress = (percent ?: 0) / 100f,
-            modifier = GlanceModifier.fillMaxWidth().height(5.dp),
-            color = GlanceTheme.colors.primary,
-            backgroundColor = GlanceTheme.colors.surfaceVariant,
+            modifier = GlanceModifier.fillMaxWidth().height(5.dp).cornerRadius(3.dp),
+            color = if ((percent ?: 0) >= 90) CRIT else BAR,
+            backgroundColor = TILE,
         )
+    }
+}
+
+@Composable
+private fun Router(router: Map<String, String>) {
+    Section("9ROUTER") {
+        Row(GlanceModifier.fillMaxWidth()) {
+            if (router.isEmpty()) Text("–", style = style(12, color = MUTED))
+            router.toSortedMap().entries.take(5).forEachIndexed { i, (provider, count) ->
+                if (i > 0) Spacer(GlanceModifier.width(6.dp))
+                Box(GlanceModifier.background(TILE).cornerRadius(8.dp).padding(horizontal = 8.dp, vertical = 3.dp)) {
+                    Text("$provider $count", style = style(11))
+                }
+            }
+        }
     }
 }

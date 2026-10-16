@@ -30,6 +30,24 @@ class FormatTest {
     }
 
     @Test
+    fun modelDropsProviderPrefix() {
+        assertEquals("gemini-3.8-flash", Format.model("ag/gemini-3.8-flash"))
+        assertEquals("", Format.model(null))
+    }
+
+    @Test
+    fun taskIcons() {
+        assertEquals(listOf("✓", "✗", "▶", "⏳", "•"), listOf("done", "failed", "running", "queued", "x").map(Format::taskIcon))
+    }
+
+    @Test
+    fun vpsSummary() {
+        assertEquals("up 7 hari · load 0.46", Format.vpsSummary(7, 0.46))
+        assertEquals("load 0.46", Format.vpsSummary(null, 0.46))
+        assertEquals("", Format.vpsSummary(null, null))
+    }
+
+    @Test
     fun routerSorted() {
         assertEquals("ag 10/11 · cx 1/1 · gh 1/1", Format.router(mapOf("gh" to "1/1", "ag" to "10/11", "cx" to "1/1")))
         assertEquals("–", Format.router(emptyMap()))

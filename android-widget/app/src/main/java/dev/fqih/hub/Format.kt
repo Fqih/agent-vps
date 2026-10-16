@@ -26,6 +26,17 @@ object Format {
             else -> stamp(status.updated, today)
         }
 
+    /** "ag/gemini-3.8-flash" -> "gemini-3.8-flash"; the provider prefix only eats widget width. */
+    fun model(name: String?): String = name?.substringAfter('/') ?: ""
+
+    fun taskIcon(status: String): String = when (status) {
+        "done" -> "✓"; "failed" -> "✗"; "running" -> "▶"; "queued" -> "⏳"; else -> "•"
+    }
+
+    fun vpsSummary(uptimeDays: Int?, load: Double?): String =
+        listOfNotNull(uptimeDays?.let { "up $it hari" }, load?.let { "load %.2f".format(java.util.Locale.ROOT, it) })
+            .joinToString(" · ")
+
     fun router(map: Map<String, String>): String =
         if (map.isEmpty()) "–" else map.toSortedMap().entries.joinToString(" · ") { "${it.key} ${it.value}" }
 }

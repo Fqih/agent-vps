@@ -46,9 +46,11 @@ class Gather(unittest.TestCase):
             raise RuntimeError("boom")
         collectors = {"vps": lambda ctx, now: OK["vps"], "router": broken}
         clock = iter([0, 0, 10, 10, 70, 70, 70, 70]).__next__
-        first = status.gather({}, NOW, collectors, clock)
-        status.gather({}, NOW, collectors, clock)
-        status.gather({}, NOW, collectors, clock)
+        with self.assertLogs("hub.status", "ERROR") as logs:
+            first = status.gather({}, NOW, collectors, clock)
+            status.gather({}, NOW, collectors, clock)
+            status.gather({}, NOW, collectors, clock)
+        self.assertEqual(len(logs.records), 2)
         self.assertEqual(first["router"], {"error": "RuntimeError: boom"})
         self.assertEqual(first["vps"], OK["vps"])
         self.assertEqual(first["updated"], "2026-10-16T09:00:00+07:00")

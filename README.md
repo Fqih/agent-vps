@@ -73,6 +73,20 @@ worker/        Cloudflare Worker for portfolio visitor alerts
 setup-vps.sh   Tailscale, localhost binds, ufw
 ```
 
+## Hub
+
+`hub/` keeps the idle 9router quota busy and puts the results on the phone:
+
+- `hub.worker` (systemd `hub-worker`): SQLite task queue (`tasks.sqlite`),
+  model chains in `hub/models.json`, retries after 1, 5 and 30 minutes.
+- `hub.status` (systemd `hub-status`, `127.0.0.1:8090`): `/status` JSON for
+  the KWGT widget (`docs/widget.md`), `/` dashboard, `/task/<id>`.
+- `hub.notify`: pushes to a self-hosted ntfy (`ntfy/`, `127.0.0.1:8091`).
+- `connectors/`: Google OAuth token helper and Calendar client.
+
+Both ports reach the tailnet through `tailscale serve --tcp`. Tests:
+`python3 -m unittest test_hub_notify test_hub_tasks test_hub_llm test_hub_worker test_google test_hub_collectors test_hub_status test_hub_morning`.
+
 ## Setup
 
 1. Run 9router (or any OpenAI-compatible endpoint) and point the `model:`

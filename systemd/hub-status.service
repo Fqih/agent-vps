@@ -1,0 +1,15 @@
+[Unit]
+Description=Hub status endpoint and dashboard (tailnet only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=agent
+WorkingDirectory=/home/agent/hermes_automation
+ExecStart=/usr/bin/python3 -m hub.status
+Restart=always
+RestartSec=10
+MemoryMax=150M
+
+[Install]
+WantedBy=multi-user.target

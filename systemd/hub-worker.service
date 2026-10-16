@@ -1,0 +1,15 @@
+[Unit]
+Description=Hub task worker (LLM queue over 9router)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=agent
+WorkingDirectory=/home/agent/hermes_automation
+ExecStart=/usr/bin/python3 -m hub.worker
+Restart=always
+RestartSec=10
+MemoryMax=150M
+
+[Install]
+WantedBy=multi-user.target

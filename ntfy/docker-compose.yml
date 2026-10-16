@@ -1,0 +1,12 @@
+services:
+  ntfy:
+    image: binwiederhier/ntfy:latest   # pin to the pulled version after first deploy
+    container_name: ntfy
+    command: serve
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8091:80"            # tailnet access via `tailscale serve --tcp 8091`
+    volumes:
+      - ./server.yml:/etc/ntfy/server.yml:ro
+      - ./data:/var/lib/ntfy
+    mem_limit: 64m

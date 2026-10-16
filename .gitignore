@@ -7,3 +7,4 @@ __pycache__/
 !.env.example
 worker/.wrangler/
 worker/node_modules/
+ntfy/data/

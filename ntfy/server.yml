@@ -1,0 +1,6 @@
+base-url: "http://agent-vps:8091"       # replace with the MagicDNS name on the VPS copy
+listen-http: ":80"
+cache-file: "/var/lib/ntfy/cache.db"
+cache-duration: "24h"
+auth-file: "/var/lib/ntfy/user.db"
+auth-default-access: "deny-all"

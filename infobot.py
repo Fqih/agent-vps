@@ -291,21 +291,30 @@ def scheduled(db: sqlite3.Connection, jobs: dict, info: dict, state: dict) -> No
         if alerts:
             tg.send(info, "<b>Monitor</b>\n" + escape("\n".join(alerts)))
             notify.publish(info, "alerts", "Monitor", "\n".join(alerts), "high", fallback=False)
-        events, cal_error = morning.soon_events(hub_ctx, now)
-        for ev in events:
-            if once(db, f"event_remind:{ev['id']}", ev["start"]):
-                notify.publish(info, "alerts", f"{ev['time']} {ev['title']}", "Mulai dalam 1 jam", "high")
-        if cal_error and once(db, "google_warn", today):
-            notify.publish(info, "jobs", "Login Google bermasalah",
-                           f"{cal_error}. Jalankan ulang connectors.google_auth login.")
         if info.get("HC_PING_URL"):  # dead man's switch: an outside service alerts when pings stop
             monitor.check_url(info["HC_PING_URL"])
+        try:  # Google trouble must never stop the rest of the schedule
+            events, cal_error = morning.soon_events(hub_ctx, now)
+            for ev in events:
+                if once(db, f"event_remind:{ev['id']}", ev["start"]):
+                    notify.publish(info, "alerts", f"{ev['time']} {ev['title']}", "Mulai dalam 1 jam", "high")
+            if cal_error and once(db, "google_warn", today):
+                notify.publish(info, "jobs", "Login Google bermasalah",
+                               f"{cal_error}. Jalankan ulang connectors.google_auth login.")
+        except Exception:
+            log.exception("calendar check")
 
     if digest_missing(db, local) and once(db, "digest_alert", today):
         tg.send(info, "<b>Digest hari ini belum terkirim.</b> Cek ~/hermes_reports/execution.log")
 
-    if (local.hour, local.minute) >= MORNING_PUSH and once(db, "morning_push", today):
-        notify.publish(info, "digest", "Pagi ini", morning.morning_text(hub_ctx, now), "low")
+    if (local.hour, local.minute) >= MORNING_PUSH and tracker.kv_get(db, "morning_push") != today:
+        try:  # build first: a failure leaves the day unmarked so the next tick retries
+            text = morning.morning_text(hub_ctx, now)
+        except Exception:
+            log.exception("morning summary")
+        else:
+            if once(db, "morning_push", today):
+                notify.publish(info, "digest", "Pagi ini", text, "low")
 
     if local.hour not in DAYTIME:
         return

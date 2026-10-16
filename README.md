@@ -85,7 +85,7 @@ setup-vps.sh   Tailscale, localhost binds, ufw
 - `connectors/`: Google OAuth token helper and Calendar client.
 
 Both ports reach the tailnet through `tailscale serve --tcp`. Tests:
-`python3 -m unittest test_hub_notify test_hub_tasks test_hub_llm test_hub_worker test_google test_hub_collectors test_hub_status test_hub_morning`.
+`python3 -m unittest test_hub_notify test_hub_tasks test_hub_llm test_hub_worker test_google test_hub_collectors test_hub_status test_hub_morning test_hub_wiring`.
 
 ## Setup
 

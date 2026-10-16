@@ -23,6 +23,7 @@ PORT = 8090
 CACHE_SECONDS = 60
 COLLECTORS = {"jobs": jobs.collect, "today": today.collect, "queue": queue.collect,
               "vps": vps.collect, "router": router9.collect}
+TOKEN_IN_URL = re.compile(r"token=[^&\s\"]*")
 LEVEL_ICON = {"ok": "🟢", "warn": "🟡", "crit": "🔴"}
 log = logging.getLogger("hub.status")
 _cache: dict = {}
@@ -118,7 +119,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(404, "text/plain", "not found")
 
     def log_message(self, fmt, *args):
-        log.info("%s %s", self.address_string(), fmt % args)
+        log.info("%s %s", self.address_string(), TOKEN_IN_URL.sub("token=***", fmt % args))
 
 
 def make_server(ctx: dict, port: int = PORT) -> ThreadingHTTPServer:

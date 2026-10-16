@@ -15,14 +15,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from digest import DB_PATH, REPORT_DIR, load_env
-from hub import tasks
+from hub import quota, tasks
 from hub.collectors import jobs, queue, router9, today, vps
 from hub.collectors.common import WIB
 
 PORT = 8090
 CACHE_SECONDS = 60
 COLLECTORS = {"jobs": jobs.collect, "today": today.collect, "queue": queue.collect,
-              "vps": vps.collect, "router": router9.collect}
+              "vps": vps.collect, "router": router9.collect, "quota": quota.collect}
 TOKEN_IN_URL = re.compile(r"token=[^&\s\"]*")
 LEVEL_ICON = {"ok": "🟢", "warn": "🟡", "crit": "🔴"}
 log = logging.getLogger("hub.status")
@@ -130,7 +130,9 @@ def make_server(ctx: dict, port: int = PORT) -> ThreadingHTTPServer:
 def main() -> None:
     logging.basicConfig(filename=REPORT_DIR / "hub-status.log", level=logging.INFO,
                         format="[%(asctime)s] %(levelname)s %(name)s %(message)s")
-    make_server(make_ctx(load_env())).serve_forever()
+    ctx = make_ctx(load_env())
+    quota.start(ctx)
+    make_server(ctx).serve_forever()
 
 
 if __name__ == "__main__":

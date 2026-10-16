@@ -45,6 +45,15 @@ class Scheduled(unittest.TestCase):
                 pass  # a Telegram outage may abort the tick; what matters is what reached ntfy
         return ping, publish
 
+    def test_check_tick_records_vps_sample(self):
+        db = state_db()
+        with mock.patch("hub.collectors.vps.collect", return_value={"cpu": 5, "ram": 60, "disk": 22}):
+            self.tick(db)
+        self.assertEqual(db.execute("SELECT cpu, ram, disk FROM vps_samples").fetchall(), [(5, 60, 22)])
+
+    def test_status_serves_quota(self):
+        self.assertIn("quota", status.COLLECTORS)
+
     def test_monitor_alert_reaches_ntfy_when_telegram_fails(self):
         _, publish = self.tick(state_db(), alerts=["DOWN container:ntfy"], send_error=OSError("tg down"))
         self.assertIn("alerts", [c.args[1] for c in publish.call_args_list])

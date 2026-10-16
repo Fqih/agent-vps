@@ -3,6 +3,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
@@ -10,7 +11,7 @@ from unittest import mock
 import monitor
 import tracker
 from connectors.google_auth import AuthError, TokenMissing
-from hub import tasks
+from hub import history, tasks
 from hub.collectors import jobs, queue, router9, today, vps
 
 NOW = datetime(2026, 10, 16, 2, 0, tzinfo=timezone.utc)  # 09:00 WIB
@@ -49,8 +50,8 @@ class Collectors(unittest.TestCase):
         self.assertEqual(out, {"new_matches": 1, "drafts": 0, "active": 3, "interview": 1, "followup_due": 1})
 
     def test_jobs_top_new_newest_first(self):
-        self.assertEqual(jobs.collect(self.ctx, NOW)["top_new"], [
-            {"title": "Data Analyst", "company": "PT A"}, {"title": "BI", "company": "PT B"}])
+        # same 24 h window as new_matches: BI (3 days old) is not "new"
+        self.assertEqual(jobs.collect(self.ctx, NOW)["top_new"], [{"title": "Data Analyst", "company": "PT A"}])
 
     def test_queue_recent_tasks(self):
         db = tasks.connect(self.ctx["tasks_db"])
@@ -102,6 +103,14 @@ class Collectors(unittest.TestCase):
         self.assertEqual((out["ram"], out["down"], out["backup_ok"]), (60, ["container:cv-bot"], True))
         self.assertEqual((out["load"], out["uptime_days"], out["backup_at"]), (0.5, 12, "03:00"))
         self.assertTrue(0 <= out["cpu"] <= 100 and 0 <= out["disk"] <= 100)
+
+    def test_vps_history_from_samples(self):
+        self.ctx["meminfo"].write_text("MemTotal:  2000000 kB\nMemAvailable:  800000 kB\n")
+        self.ctx["loadavg"].write_text("0.50 0.40 0.30 1/200 999\n")
+        self.ctx["uptime"].write_text("100.0 200.0\n")
+        with closing(sqlite3.connect(self.ctx["state_db"])) as db:
+            history.record(db, NOW, 7, 61, 22)
+        self.assertEqual(vps.collect(self.ctx, NOW)["history"], {"cpu": [7], "ram": [61], "disk": [22]})
 
     def test_vps_partial_backup_not_ok(self):
         self.ctx["meminfo"].write_text("MemTotal:  2000000 kB\nMemAvailable:  800000 kB\n")

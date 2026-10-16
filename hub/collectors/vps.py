@@ -8,6 +8,7 @@ from contextlib import closing
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from hub import history
 from hub.collectors.common import WIB, ro
 
 
@@ -37,6 +38,7 @@ def collect(ctx: dict, now: datetime) -> dict:
     disk = shutil.disk_usage("/")
     with closing(ro(ctx["state_db"])) as db:
         down = [name for (name,) in db.execute("SELECT name FROM checks WHERE ok = 0 ORDER BY name")]
+        samples = history.series(db, now)
     return {
         "cpu": min(100, round(load1 / (os.cpu_count() or 1) * 100)),
         "ram": _ram_percent(Path(ctx.get("meminfo", "/proc/meminfo"))),
@@ -45,5 +47,6 @@ def collect(ctx: dict, now: datetime) -> dict:
         "backup_ok": _backup_ok(Path(ctx["backups"]), now),
         "backup_at": _backup_at(Path(ctx["backups"]), now),
         "load": round(load1, 2),
+        "history": samples,
         "uptime_days": int(float(Path(ctx.get("uptime", "/proc/uptime")).read_text().split()[0]) // 86400),
     }

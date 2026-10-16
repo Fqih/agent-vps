@@ -23,7 +23,8 @@ import practice
 import readlater
 import tg
 import tracker
-from hub import morning, notify, status as hub_status, tasks
+from hub import history, morning, notify, status as hub_status, tasks
+from hub.collectors import vps as hub_vps
 from digest import DB_PATH, REPORT_DIR, WIB, jobs_env, load_env, model_config
 
 CHECK_EVERY = timedelta(minutes=5)
@@ -291,6 +292,11 @@ def scheduled(db: sqlite3.Connection, jobs: dict, info: dict, state: dict) -> No
         if alerts:  # ntfy first: transitions() already stored the state, a Telegram error must not lose it
             notify.publish(info, "alerts", "Monitor", "\n".join(alerts), "high", fallback=False)
             tg.send(info, "<b>Monitor</b>\n" + escape("\n".join(alerts)))
+        try:  # chart samples for the widget; a broken /proc read must not stop the schedule
+            sample = hub_vps.collect(hub_ctx, now)
+            history.record(db, now, sample["cpu"], sample["ram"], sample["disk"])
+        except Exception:
+            log.exception("vps sample")
         if info.get("HC_PING_URL"):  # dead man's switch: an outside service alerts when pings stop
             monitor.check_url(info["HC_PING_URL"])
         try:  # Google trouble must never stop the rest of the schedule

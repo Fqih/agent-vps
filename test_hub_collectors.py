@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -21,7 +22,8 @@ class Collectors(unittest.TestCase):
         root = Path(self.dir.name)
         self.ctx = {"state_db": root / "state.sqlite", "tasks_db": root / "tasks.sqlite",
                     "router_db": root / "router.sqlite", "backups": root / "backups",
-                    "meminfo": root / "meminfo", "loadavg": root / "loadavg"}
+                    "meminfo": root / "meminfo", "loadavg": root / "loadavg", "uptime": root / "uptime"}
+        self.ctx["uptime"].write_text("100.0 100.0\n")
         with sqlite3.connect(self.ctx["state_db"]) as db:
             tracker.init(db)
             monitor.init(db)
@@ -42,8 +44,25 @@ class Collectors(unittest.TestCase):
         self.dir.cleanup()
 
     def test_jobs_counts(self):
-        self.assertEqual(jobs.collect(self.ctx, NOW), {
-            "new_matches": 1, "drafts": 0, "active": 3, "interview": 1, "followup_due": 1})
+        out = jobs.collect(self.ctx, NOW)
+        out.pop("top_new")
+        self.assertEqual(out, {"new_matches": 1, "drafts": 0, "active": 3, "interview": 1, "followup_due": 1})
+
+    def test_jobs_top_new_newest_first(self):
+        self.assertEqual(jobs.collect(self.ctx, NOW)["top_new"], [
+            {"title": "Data Analyst", "company": "PT A"}, {"title": "BI", "company": "PT B"}])
+
+    def test_queue_recent_tasks(self):
+        db = tasks.connect(self.ctx["tasks_db"])
+        for i in range(4):
+            tasks.enqueue(db, "llm.prompt", {"title": f"T{i}", "prompt": "rahasia"}, now=NOW)
+        tasks.finish(db, 4, "hasil", "ag/gemini-3.8-flash", NOW)
+        db.close()
+        recent = queue.collect(self.ctx, NOW)["recent"]
+        self.assertEqual(recent, [{"title": "T3", "status": "done", "model": "ag/gemini-3.8-flash"},
+                                  {"title": "T2", "status": "queued", "model": None},
+                                  {"title": "T1", "status": "queued", "model": None}])
+        self.assertNotIn("rahasia", json.dumps(recent))
 
     def test_today_merges_events_and_followups(self):
         self.ctx["token_fn"] = lambda: "tok"
@@ -66,7 +85,8 @@ class Collectors(unittest.TestCase):
         db = tasks.connect(self.ctx["tasks_db"])
         tasks.enqueue(db, "k", {}, now=NOW)
         db.close()
-        self.assertEqual(queue.collect(self.ctx, NOW), {"running": 0, "queued": 1, "failed": 0})
+        out = queue.collect(self.ctx, NOW)
+        self.assertEqual({k: out[k] for k in ("running", "queued", "failed")}, {"running": 0, "queued": 1, "failed": 0})
 
     def test_vps(self):
         self.ctx["meminfo"].write_text("MemTotal:  2000000 kB\nMemAvailable:  800000 kB\n")
@@ -75,8 +95,12 @@ class Collectors(unittest.TestCase):
         day.mkdir(parents=True)
         (day / "9router.sqlite.gz").write_bytes(b"x")
         (day / "OK").write_text("")
+        self.ctx["uptime"].write_text("1100000.5 2000000.0\n")
+        marker = day / "OK"
+        os.utime(marker, (NOW.timestamp() - 6 * 3600, NOW.timestamp() - 6 * 3600))  # 03:00 WIB
         out = vps.collect(self.ctx, NOW)
         self.assertEqual((out["ram"], out["down"], out["backup_ok"]), (60, ["container:cv-bot"], True))
+        self.assertEqual((out["load"], out["uptime_days"], out["backup_at"]), (0.5, 12, "03:00"))
         self.assertTrue(0 <= out["cpu"] <= 100 and 0 <= out["disk"] <= 100)
 
     def test_vps_partial_backup_not_ok(self):

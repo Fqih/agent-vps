@@ -22,6 +22,16 @@ def _backup_ok(dest: Path, now: datetime) -> bool:
     return any((dest / d.isoformat() / "OK").exists() for d in (day, day - timedelta(days=1)))
 
 
+def _backup_at(dest: Path, now: datetime) -> str | None:
+    """WIB time of the newest complete backup (OK marker mtime), today or yesterday."""
+    day = now.astimezone(WIB).date()
+    for d in (day, day - timedelta(days=1)):
+        marker = dest / d.isoformat() / "OK"
+        if marker.exists():
+            return datetime.fromtimestamp(marker.stat().st_mtime, WIB).strftime("%H:%M")
+    return None
+
+
 def collect(ctx: dict, now: datetime) -> dict:
     load1 = float(Path(ctx.get("loadavg", "/proc/loadavg")).read_text().split()[0])
     disk = shutil.disk_usage("/")
@@ -33,4 +43,7 @@ def collect(ctx: dict, now: datetime) -> dict:
         "disk": disk.used * 100 // disk.total,
         "down": down,
         "backup_ok": _backup_ok(Path(ctx["backups"]), now),
+        "backup_at": _backup_at(Path(ctx["backups"]), now),
+        "load": round(load1, 2),
+        "uptime_days": int(float(Path(ctx.get("uptime", "/proc/uptime")).read_text().split()[0]) // 86400),
     }

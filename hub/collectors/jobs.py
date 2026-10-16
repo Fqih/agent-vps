@@ -11,7 +11,10 @@ def collect(ctx: dict, now: datetime) -> dict:
     with closing(ro(ctx["state_db"])) as db:
         def count(where: str, *args) -> int:
             return db.execute(f"SELECT COUNT(*) FROM jobs WHERE {where}", args).fetchone()[0]
+        top = db.execute("SELECT title, company FROM jobs WHERE status = 'baru' "
+                         "ORDER BY created_at DESC LIMIT 3").fetchall()
         return {
+            "top_new": [{"title": t or "?", "company": c or "?"} for t, c in top],
             "new_matches": count("status = 'baru' AND created_at >= ?", (now - timedelta(days=1)).isoformat()),
             "drafts": 0,  # filled by the job-application agent (sub-project 1)
             "active": count("status IN ('disimpan', 'dilamar', 'interview')"),

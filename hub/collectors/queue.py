@@ -9,4 +9,6 @@ from hub import tasks
 
 def collect(ctx: dict, now: datetime) -> dict:
     with closing(tasks.connect(ctx["tasks_db"])) as db:
-        return tasks.counts(db, now)
+        recent = [{"title": t["title"], "status": t["status"], "model": t["model"]}  # titles only, never prompts
+                  for t in tasks.recent(db, limit=3)]
+        return {**tasks.counts(db, now), "recent": recent}

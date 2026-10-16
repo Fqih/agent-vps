@@ -44,13 +44,13 @@ memory (sub-project 3). Telegram stays the place for commands and chat.
 ## Model policy
 
 Model chains live in `hub/models.json`, not in code, so a model that starts
-working (or dies) is a one-line change. Antigravity Claude 4.6 models are
-not used. Current chains:
+working (or dies) is a one-line change. Antigravity Claude 4.6 models and
+the Claude subscription (`cc/`) are not used. Current chains:
 
 | Chain | Order |
 |---|---|
 | `fast` | `ag/gemini-3.8-flash-high`, `ag/gemini-3.8-flash`, `cx/gpt-6-luna` |
-| `heavy` | `ag/gemini-3.1-pro-high`, `ag/gemini-3.8-flash-high`, `cc/claude-sonnet-5-5`, `cx/gpt-6.1-sol` |
+| `heavy` | `ag/gemini-3.1-pro-high`, `ag/gemini-3.8-flash-high`, `cx/gpt-6.1-sol`, `cx/gpt-6-luna` |
 
 `ag/gemini-3.1-pro-high` returns 404 today. The worker remembers a model
 that answered 404 and skips it for 6 hours, so a dead head of the chain

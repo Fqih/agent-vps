@@ -7,7 +7,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
@@ -51,33 +50,17 @@ import androidx.glance.unit.ColorProvider as UnitColorProvider
 import kotlinx.coroutines.flow.first
 
 class HubWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Responsive(setOf(SMALL, MEDIUM, LARGE))
+    // Exact, not Responsive: Responsive reports the matched breakpoint as LocalSize, so the layout
+    // could never see the real 4x7 height that unlocks GitHub and taller charts.
+    override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val store = Store(context)
         val initial = store.snapshot.first()
         provideContent {
             val snap by store.snapshot.collectAsState(initial = initial)
-            val height = LocalSize.current.height
-            val size = when {
-                height >= LARGE.height -> Size.LARGE
-                height >= MEDIUM.height -> Size.MEDIUM
-                else -> Size.SMALL
-            }
-            // LARGE content is sized for LARGE.height; the GitHub grid needs GITHUB_FROM, and the
-            // charts take whatever a taller widget adds on top of that.
-            val github = size == Size.LARGE && height >= GITHUB_FROM
-            val base = if (github) GITHUB_FROM else LARGE.height
-            val chart = if (size == Size.LARGE) (40 + (height - base).value.toInt()).coerceIn(40, 120) else 0
-            Content(snap, size, chart, github)
+            Content(snap, Layout.of(LocalSize.current.height.value))
         }
-    }
-
-    companion object {
-        val SMALL = DpSize(250.dp, 110.dp)
-        val MEDIUM = DpSize(250.dp, 330.dp)
-        val LARGE = DpSize(250.dp, 560.dp)
-        val GITHUB_FROM = 680.dp
     }
 }
 
@@ -90,7 +73,6 @@ class HubWidgetReceiver : GlanceAppWidgetReceiver() {
     }
 }
 
-private enum class Size { SMALL, MEDIUM, LARGE }
 
 // Frosted glass: neutral translucent layers over the wallpaper, white text. App widgets cannot blur
 // what is behind them, so the look comes from alpha only; colors are fixed and ignore Material You.
@@ -114,7 +96,7 @@ private fun style(size: Int = 12, bold: Boolean = false, color: UnitColorProvide
     TextStyle(color = color, fontSize = size.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
 
 @Composable
-private fun Content(snap: Snapshot, size: Size, chart: Int, github: Boolean) {
+private fun Content(snap: Snapshot, layout: Layout) {
     val status = snap.raw?.let { runCatching { Status.parse(it) }.getOrNull() }
     val setup = actionStartActivity<SettingsActivity>()
     val dashboard = snap.url?.let { open(UrlRules.dashboard(it)) } ?: setup
@@ -122,7 +104,7 @@ private fun Content(snap: Snapshot, size: Size, chart: Int, github: Boolean) {
         Column(GlanceModifier.fillMaxSize().background(GLASS).cornerRadius(23.dp).padding(horizontal = 14.dp, vertical = 12.dp)) {
             Header(status, snap, dashboard)
             if (status != null && snap.url != null) {
-                Body(status, size, chart, github, snap.bot?.let { open(it) } ?: dashboard, dashboard)
+                Body(status, layout.size, layout.chart, layout.github, snap.bot?.let { open(it) } ?: dashboard, dashboard)
             } else {
                 Spacer(GlanceModifier.defaultWeight())
                 Text(

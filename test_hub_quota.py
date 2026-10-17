@@ -57,6 +57,10 @@ class Malformed(unittest.TestCase):
         self.assertEqual((out["accounts"], out["weekly"], out["reset"]), (5, 88, "18:23"))
         self.assertEqual(out["session"], 98)  # 99 from the bad-reset account, 97 from CODEX
 
+    def test_failed_account_counts_as_missing(self):
+        out = quota.summarize({"codex": [CODEX, None]})["codex"]
+        self.assertEqual((out["accounts"], out["missing"], out["session"]), (2, 1, 97))
+
     def test_reset_without_timezone_is_ignored(self):
         naive = {"quotas": {"session": {"remaining": 50, "total": 100, "resetAt": "2026-10-16T01:00:00"}}}
         self.assertEqual(quota.summarize({"codex": [naive, CODEX]})["codex"]["reset"], "18:23")
@@ -65,6 +69,7 @@ class Malformed(unittest.TestCase):
 class FakeRouter(BaseHTTPRequestHandler):
     usage_status = 200
     logins = 0
+    fail_ids: set = set()
 
     def do_POST(self):
         type(self).logins += 1
@@ -73,7 +78,8 @@ class FakeRouter(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        ok = "auth_token=t" in (self.headers.get("Cookie") or "") and self.usage_status == 200
+        ok = ("auth_token=t" in (self.headers.get("Cookie") or "") and self.usage_status == 200
+              and self.path.rsplit("/", 1)[-1] not in self.fail_ids)
         body = json.dumps(CODEX).encode()
         self.send_response(200 if ok else 500)
         self.end_headers()
@@ -85,7 +91,7 @@ class FakeRouter(BaseHTTPRequestHandler):
 
 class Fetch(unittest.TestCase):
     def setUp(self):
-        FakeRouter.usage_status, FakeRouter.logins = 200, 0
+        FakeRouter.usage_status, FakeRouter.logins, FakeRouter.fail_ids = 200, 0, set()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), FakeRouter)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.addCleanup(self.server.shutdown)
@@ -104,6 +110,12 @@ class Fetch(unittest.TestCase):
         self.add("b", "codex", active=0)
         self.add("g", "github")
         self.assertEqual(quota.fetch(self.ctx), {"codex": [CODEX]})
+
+    def test_failed_account_is_kept_as_none(self):
+        self.add("a", "codex")
+        self.add("b", "codex")
+        FakeRouter.fail_ids = {"b"}
+        self.assertEqual(quota.fetch(self.ctx), {"codex": [CODEX, None]})
 
     def test_no_eligible_accounts_is_empty_without_login(self):
         self.add("g", "github")

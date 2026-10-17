@@ -3,19 +3,18 @@ from __future__ import annotations
 
 import logging
 import re
-import time
 import urllib.request
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
+from hub.collectors import common
 from hub.collectors.common import WIB
 
-TTL_SECONDS = 3600
-RETRY_SECONDS = 600
+REFRESH_SECONDS = 3600
 DAY = re.compile(r'<td[^>]*data-date="(\d{4}-\d\d-\d\d)"[^>]*>')
 ATTR = re.compile(r'(id|data-level)="([^"]*)"')
 TIP = re.compile(r'<tool-tip[^>]*\bfor="([^"]+)"[^>]*>\s*(No|\d+) contributions? on')
 log = logging.getLogger("hub.github")
-_cache: dict = {}
+_state: dict = {"value": None, "error": None}
 
 
 def fetch(user: str) -> str:
@@ -43,21 +42,21 @@ def parse(html: str, today: date) -> dict:
             "streak": streak, "weeks": weeks}
 
 
-def collect(ctx: dict, now: datetime) -> dict:
-    """Hourly; a failed fetch keeps the last good calendar and retries after 10 minutes."""
-    if _cache.get("value") is not None and time.monotonic() - _cache.get("at", 0) < TTL_SECONDS:
-        return _cache["value"]
-    if _cache.get("value") is None and time.monotonic() - _cache.get("failed", -RETRY_SECONDS) < RETRY_SECONDS:
-        raise RuntimeError(_cache.get("error", "github unavailable"))
+def refresh_once(ctx: dict, now: datetime, fetch=fetch) -> None:
     user = ctx["env"].get("GITHUB_USER", "Fqih")
     try:
-        value = dict(parse(ctx.get("github_fetch", fetch)(user), now.astimezone(WIB).date()), user=user)
-    except Exception as err:
+        _state["value"] = dict(parse(fetch(user), now.astimezone(WIB).date()), user=user)
+        _state["error"] = None
+    except Exception as err:  # keep the last calendar; GitHub hiccups are not worth a warning
         log.warning("github contributions: %s", err)
-        _cache.update(failed=time.monotonic(), error=f"{type(err).__name__}: {err}"[:120])
-        if _cache.get("value") is None:
-            raise
-        _cache["at"] = time.monotonic() - TTL_SECONDS + RETRY_SECONDS
-        return _cache["value"]
-    _cache.update(value=value, at=time.monotonic())
-    return value
+        _state["error"] = f"{type(err).__name__}: {err}"[:120]
+
+
+def start(ctx: dict):
+    return common.every("github", REFRESH_SECONDS, lambda: refresh_once(ctx, datetime.now(timezone.utc)))
+
+
+def collect(ctx: dict, now: datetime) -> dict:
+    if _state["value"] is not None:
+        return _state["value"]
+    return {"error": _state["error"]} if _state["error"] else {"loading": True}

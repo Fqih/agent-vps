@@ -51,6 +51,7 @@ class FormatTest {
     fun quotaNameShowsAccountCountWhenSeveral() {
         assertEquals("Gemini ×11", Format.quotaName(Quota("gemini", 11, 100, 92, null)))
         assertEquals("Claude", Format.quotaName(Quota("claude", 1, 57, 72, null)))
+        assertEquals("Gemini 10/11", Format.quotaName(Quota("gemini", 11, 100, 92, null, missing = 1)))
     }
 
     @Test

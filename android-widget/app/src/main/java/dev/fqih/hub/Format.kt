@@ -39,7 +39,11 @@ object Format {
 
     fun provider(q: Quota): String = q.name.replaceFirstChar { it.uppercase() }
 
-    fun quotaName(q: Quota): String = provider(q) + if (q.accounts > 1) " ×${q.accounts}" else ""
+    fun quotaName(q: Quota): String = provider(q) + when {
+        q.missing > 0 -> " ${q.accounts - q.missing}/${q.accounts}"
+        q.accounts > 1 -> " ×${q.accounts}"
+        else -> ""
+    }
 
     fun github(c: Contrib): String =
         "%,d setahun · streak %d · hari ini %d".format(java.util.Locale.forLanguageTag("id"), c.total, c.streak, c.today)

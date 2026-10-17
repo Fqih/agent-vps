@@ -47,22 +47,27 @@ class Parse(unittest.TestCase):
 
 class Collect(unittest.TestCase):
     def setUp(self):
-        github._cache.clear()
+        github._state.update(value=None, error=None)
 
-    def test_cached_for_an_hour(self):
+    def test_loading_until_first_refresh(self):
+        self.assertEqual(github.collect({}, NOW), {"loading": True})
+
+    def test_refresh_parses_for_configured_user(self):
         calls = []
-        fetch = lambda user: calls.append(user) or HTML
-        ctx = {"env": {"GITHUB_USER": "someone"}, "github_fetch": fetch}
-        github.collect(ctx, NOW)
-        out = github.collect(ctx, NOW)
-        self.assertEqual((calls, out["user"]), (["someone"], "someone"))
+        github.refresh_once({"env": {"GITHUB_USER": "someone"}}, NOW,
+                            fetch=lambda user: calls.append(user) or HTML)
+        out = github.collect({}, NOW)
+        self.assertEqual((calls, out["user"], out["total"]), (["someone"], "someone", 6))
 
     def test_failure_keeps_last_value(self):
-        ctx = {"env": {}, "github_fetch": lambda user: HTML}
-        first = github.collect(ctx, NOW)
-        github._cache["at"] = 0  # expire
-        ctx["github_fetch"] = lambda user: (_ for _ in ()).throw(OSError("down"))
-        self.assertEqual(github.collect(ctx, NOW), first)
+        github.refresh_once({"env": {}}, NOW, fetch=lambda user: HTML)
+        first = github.collect({}, NOW)
+        github.refresh_once({"env": {}}, NOW, fetch=lambda user: (_ for _ in ()).throw(OSError("down")))
+        self.assertEqual(github.collect({}, NOW), first)
+
+    def test_failure_without_value_is_error(self):
+        github.refresh_once({"env": {}}, NOW, fetch=lambda user: (_ for _ in ()).throw(OSError("down")))
+        self.assertIn("down", github.collect({}, NOW)["error"])
 
 
 if __name__ == "__main__":

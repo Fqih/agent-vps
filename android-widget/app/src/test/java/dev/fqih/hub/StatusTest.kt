@@ -19,7 +19,7 @@ class StatusTest {
                 "load":0.46,"uptime_days":7,"backup_at":"03:00",
                 "history":{"cpu":[5,13],"ram":[48,49],"disk":[23,23]}},
          "quota":{"claude":{"accounts":1,"session":57,"weekly":72,"reset":"18:30"},
-                  "gemini":{"accounts":11,"session":100,"weekly":92,"reset":"18:56"},
+                  "gemini":{"accounts":11,"session":100,"weekly":92,"reset":"18:56","missing":1},
                   "codex":{"accounts":1,"session":null,"weekly":88,"reset":null}},
          "github":{"user":"Fqih","total":4393,"today":0,"streak":1,"weeks":[[0,1,2,3,4,0,1],[2,0,-1,-1,-1,-1,-1]]},
          "router":{"ag":"10/11","cx":"1/1","gh":"1/1"},
@@ -37,7 +37,7 @@ class StatusTest {
         assertEquals(Queue(0, 2, 1, listOf(TaskRow("Ringkas", "done", "ag/gemini-3.8-flash"), TaskRow("Draft", "queued", null))), s.queue)
         assertEquals(Vps(13, 49, 23, listOf("site:demo"), true, 0.46, 7, "03:00",
             History(listOf(5, 13), listOf(48, 49), listOf(23, 23))), s.vps)
-        assertEquals(listOf(Quota("gemini", 11, 100, 92, "18:56"), Quota("claude", 1, 57, 72, "18:30"),
+        assertEquals(listOf(Quota("gemini", 11, 100, 92, "18:56", missing = 1), Quota("claude", 1, 57, 72, "18:30"),
             Quota("codex", 1, null, 88, null)), s.quota)
         assertEquals(QuotaState.READY, s.quotaState)
         assertEquals(Contrib("Fqih", 4393, 0, 1, listOf(listOf(0, 1, 2, 3, 4, 0, 1), listOf(2, 0, -1, -1, -1, -1, -1))), s.github)

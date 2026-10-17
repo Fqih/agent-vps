@@ -19,7 +19,10 @@ data class Vps(
     val load: Double?, val uptimeDays: Int?, val backupAt: String?, val history: History = History(),
 )
 /** Average remaining percent over a provider's active accounts. */
-data class Quota(val name: String, val accounts: Int, val session: Int?, val weekly: Int?, val reset: String?)
+/** [missing] accounts failed to report; the averages cover the others. */
+data class Quota(
+    val name: String, val accounts: Int, val session: Int?, val weekly: Int?, val reset: String?, val missing: Int = 0,
+)
 /** MISSING: server sent no quota section; LOADING: first refresh still running; READY may hold zero accounts. */
 enum class QuotaState { MISSING, LOADING, ERROR, READY }
 /** GitHub contribution calendar: weeks oldest first, each Sun..Sat level 0-4, -1 for days not yet here. */
@@ -73,7 +76,7 @@ data class Status(
                     ?: emptyMap(),
                 quota = o.section("quota")?.let { q ->
                     QUOTA_ORDER.mapNotNull { name ->
-                        q.optJSONObject(name)?.let { Quota(name, it.optInt("accounts"), it.int("session"), it.int("weekly"), it.text("reset")) }
+                        q.optJSONObject(name)?.let { Quota(name, it.optInt("accounts"), it.int("session"), it.int("weekly"), it.text("reset"), it.optInt("missing")) }
                     }
                 } ?: emptyList(),
                 quotaState = o.optJSONObject("quota")?.let { q ->

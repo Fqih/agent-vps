@@ -8,11 +8,11 @@ from __future__ import annotations
 import http.cookiejar
 import json
 import logging
-import threading
 import urllib.request
 from contextlib import closing
 from datetime import datetime, timezone
 
+from hub.collectors import common
 from hub.collectors.common import WIB, ro
 
 REFRESH_SECONDS = 15 * 60
@@ -69,7 +69,7 @@ def _quota(body, key: str) -> dict:
 
 
 def summarize(usages: dict) -> dict:
-    """usages: 9router provider -> list of /api/usage bodies, one per account."""
+    """usages: 9router provider -> list of /api/usage bodies, one per account (None = fetch failed)."""
     out = {}
     for provider, (name, session_key, weekly_key) in PROVIDERS.items():
         bodies = usages.get(provider)
@@ -79,6 +79,9 @@ def summarize(usages: dict) -> dict:
         weeklies = [_quota(b, weekly_key) for b in bodies]
         out[name] = {"accounts": len(bodies), "session": _avg([_remaining(q) for q in sessions]),
                      "weekly": _avg([_remaining(q) for q in weeklies]), "reset": _reset(sessions)}
+        missing = bodies.count(None)  # accounts whose usage request failed; averages cover the rest
+        if missing:
+            out[name]["missing"] = missing
     return out
 
 
@@ -101,7 +104,8 @@ def fetch(ctx: dict) -> dict:
                 usages.setdefault(provider, []).append(json.load(resp))
         except Exception as err:  # one bad account must not hide the rest
             log.warning("usage %s %s: %s", provider, conn_id, err)
-    if not usages:  # dashboard up but every account failed: keep the last good numbers
+            usages.setdefault(provider, []).append(None)
+    if not any(b is not None for bodies in usages.values() for b in bodies):  # dashboard up but every account failed: keep the last good numbers
         raise OSError(f"usage failed for all {len(rows)} accounts")
     return usages
 
@@ -114,14 +118,8 @@ def refresh_once(ctx: dict, fetch=fetch) -> None:
         _state["error"] = f"{type(err).__name__}: {err}"[:120]
 
 
-def start(ctx: dict, every: int = REFRESH_SECONDS) -> threading.Thread:
-    def loop():
-        while True:
-            refresh_once(ctx)
-            threading.Event().wait(every)
-    thread = threading.Thread(target=loop, name="quota", daemon=True)
-    thread.start()
-    return thread
+def start(ctx: dict, every: int = REFRESH_SECONDS):
+    return common.every("quota", every, lambda: refresh_once(ctx))
 
 
 def collect(ctx: dict, now: datetime) -> dict:

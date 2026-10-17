@@ -7,7 +7,7 @@ data class Layout(val size: Size, val github: Boolean, val chart: Int) {
     companion object {
         const val MEDIUM = 330f
         const val LARGE = 560f
-        const val GITHUB = 680f
+        const val GITHUB = 620f
 
         fun of(heightDp: Float): Layout {
             val size = when {

@@ -32,7 +32,7 @@ apps" allowed for that app.
    Hub (`POST /agenda`, same token), which feeds the widget agenda, the
    07:05 summary and the 1-hour reminders.
 4. Long-press the home screen, Widgets, Hub, place it, resize to 4x2 or
-   up to 4x7 (from 680 dp tall it adds the GitHub grid).
+   up to 4x7 (from 620 dp tall it adds the GitHub grid).
 5. HyperOS: Settings > Apps > Hub > Battery saver: **No restrictions**,
    and enable **Autostart**, so the 30-minute refresh is not killed.
 

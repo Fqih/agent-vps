@@ -65,11 +65,11 @@ Glance `SizeMode.Responsive` picks one of three layouts from the height:
 | Medium | 330 dp | 5 job tiles, 2 agenda items, quota chips (5 h remaining), VPS bars |
 | Large (4x7) | 560 dp | adds 2 newest matches, 3 agenda items, last 3 tasks, quota rows (5 h and 7 day remaining, reset time), 6 h line charts for Load/RAM/Disk with current percent |
 
-From 680 dp the large layout adds a GitHub section: the contribution
+From 620 dp the large layout adds a GitHub section: the contribution
 squares (white at rising opacity, newest week on the right, as many weeks
 as fit) with yearly total, streak and today's count; tapping opens the
 profile. The charts grow with any height above that base (560 dp without
-GitHub, 680 dp with it), up to 120 dp each, so a taller widget fills with
+GitHub, 620 dp with it), up to 120 dp each, so a taller widget fills with
 chart instead of empty space.
 
 GitHub data comes from `/status` `github`, parsed hourly on the VPS from the

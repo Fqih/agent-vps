@@ -120,7 +120,7 @@ private fun Content(snap: Snapshot, layout: Layout) {
 @Composable
 private fun ColumnScope.Body(status: Status, size: Size, chart: Int, github: Boolean, jobsTap: Action, dashboard: Action) {
     // Glance containers hold at most 10 children, so every section is its own Column.
-    // Heights: SMALL ~130 dp, MEDIUM ~300 dp, LARGE ~520 dp (+ ~115 dp GitHub) plus the chart height.
+    // Heights: SMALL ~130 dp, MEDIUM ~300 dp, LARGE ~520 dp (+ ~115 dp GitHub); measured LARGE content on the phone was ~464 dp plus the chart height.
     Jobs(status.jobs, size, jobsTap)
     if (size != Size.SMALL) Agenda(status.today, if (size == Size.LARGE) 3 else 2)
     if (size == Size.LARGE) Tasks(status.queue)

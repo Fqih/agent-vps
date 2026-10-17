@@ -21,6 +21,7 @@ class StatusTest {
          "quota":{"claude":{"accounts":1,"session":57,"weekly":72,"reset":"18:30"},
                   "gemini":{"accounts":11,"session":100,"weekly":92,"reset":"18:56"},
                   "codex":{"accounts":1,"session":null,"weekly":88,"reset":null}},
+         "github":{"user":"Fqih","total":4393,"today":0,"streak":1,"weeks":[[0,1,2,3,4,0,1],[2,0,-1,-1,-1,-1,-1]]},
          "router":{"ag":"10/11","cx":"1/1","gh":"1/1"},
          "level":"warn"}
     """.trimIndent()
@@ -38,6 +39,8 @@ class StatusTest {
             History(listOf(5, 13), listOf(48, 49), listOf(23, 23))), s.vps)
         assertEquals(listOf(Quota("gemini", 11, 100, 92, "18:56"), Quota("claude", 1, 57, 72, "18:30"),
             Quota("codex", 1, null, 88, null)), s.quota)
+        assertEquals(QuotaState.READY, s.quotaState)
+        assertEquals(Contrib("Fqih", 4393, 0, 1, listOf(listOf(0, 1, 2, 3, 4, 0, 1), listOf(2, 0, -1, -1, -1, -1, -1))), s.github)
         assertEquals(mapOf("ag" to "10/11", "cx" to "1/1", "gh" to "1/1"), s.router)
     }
 
@@ -61,6 +64,17 @@ class StatusTest {
         assertNull(s.vps!!.backupAt)
         assertEquals(History(), s.vps!!.history)
         assertEquals(emptyList<Quota>(), s.quota)
+        assertEquals(QuotaState.MISSING, s.quotaState)
+        assertNull(s.github)
+    }
+
+    @Test
+    fun quotaStatesAreDistinct() {
+        assertEquals(QuotaState.LOADING, Status.parse("""{"quota":{"loading":true}}""").quotaState)
+        assertEquals(QuotaState.ERROR, Status.parse("""{"quota":{"error":"HTTPError: 401"}}""").quotaState)
+        val empty = Status.parse("""{"quota":{}}""")
+        assertEquals(QuotaState.READY, empty.quotaState)
+        assertEquals(emptyList<Quota>(), empty.quota)
     }
 
     @Test(expected = JSONException::class)

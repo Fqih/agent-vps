@@ -64,9 +64,12 @@ class HubWidget : GlanceAppWidget() {
                 height >= MEDIUM.height -> Size.MEDIUM
                 else -> Size.SMALL
             }
-            // LARGE content is sized for LARGE.height; the charts take whatever a taller widget adds.
-            val chart = if (size == Size.LARGE) (40 + (height - LARGE.height).value.toInt()).coerceIn(40, 120) else 0
-            Content(snap, size, chart)
+            // LARGE content is sized for LARGE.height; the GitHub grid needs GITHUB_FROM, and the
+            // charts take whatever a taller widget adds on top of that.
+            val github = size == Size.LARGE && height >= GITHUB_FROM
+            val base = if (github) GITHUB_FROM else LARGE.height
+            val chart = if (size == Size.LARGE) (40 + (height - base).value.toInt()).coerceIn(40, 120) else 0
+            Content(snap, size, chart, github)
         }
     }
 
@@ -74,6 +77,7 @@ class HubWidget : GlanceAppWidget() {
         val SMALL = DpSize(250.dp, 110.dp)
         val MEDIUM = DpSize(250.dp, 330.dp)
         val LARGE = DpSize(250.dp, 560.dp)
+        val GITHUB_FROM = 680.dp
     }
 }
 
@@ -110,7 +114,7 @@ private fun style(size: Int = 12, bold: Boolean = false, color: UnitColorProvide
     TextStyle(color = color, fontSize = size.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
 
 @Composable
-private fun Content(snap: Snapshot, size: Size, chart: Int) {
+private fun Content(snap: Snapshot, size: Size, chart: Int, github: Boolean) {
     val status = snap.raw?.let { runCatching { Status.parse(it) }.getOrNull() }
     val setup = actionStartActivity<SettingsActivity>()
     val dashboard = snap.url?.let { open(UrlRules.dashboard(it)) } ?: setup
@@ -118,7 +122,7 @@ private fun Content(snap: Snapshot, size: Size, chart: Int) {
         Column(GlanceModifier.fillMaxSize().background(GLASS).cornerRadius(23.dp).padding(horizontal = 14.dp, vertical = 12.dp)) {
             Header(status, snap, dashboard)
             if (status != null && snap.url != null) {
-                Body(status, size, chart, snap.bot?.let { open(it) } ?: dashboard, dashboard)
+                Body(status, size, chart, github, snap.bot?.let { open(it) } ?: dashboard, dashboard)
             } else {
                 Spacer(GlanceModifier.defaultWeight())
                 Text(
@@ -132,13 +136,14 @@ private fun Content(snap: Snapshot, size: Size, chart: Int) {
 }
 
 @Composable
-private fun ColumnScope.Body(status: Status, size: Size, chart: Int, jobsTap: Action, dashboard: Action) {
+private fun ColumnScope.Body(status: Status, size: Size, chart: Int, github: Boolean, jobsTap: Action, dashboard: Action) {
     // Glance containers hold at most 10 children, so every section is its own Column.
-    // Heights: SMALL ~130 dp, MEDIUM ~300 dp, LARGE ~520 dp plus the chart height.
+    // Heights: SMALL ~130 dp, MEDIUM ~300 dp, LARGE ~520 dp (+ ~115 dp GitHub) plus the chart height.
     Jobs(status.jobs, size, jobsTap)
     if (size != Size.SMALL) Agenda(status.today, if (size == Size.LARGE) 3 else 2)
     if (size == Size.LARGE) Tasks(status.queue)
-    if (size != Size.SMALL) QuotaSection(status.quota, detail = size == Size.LARGE)
+    if (size != Size.SMALL) QuotaSection(status, detail = size == Size.LARGE)
+    if (github) GitHub(status.github)
     Spacer(GlanceModifier.defaultWeight())
     if (size == Size.LARGE) VpsCharts(status, chart, dashboard) else Vps(status, size, dashboard)
 }
@@ -352,20 +357,49 @@ private fun RowScope.Bar(label: String, percent: Int?, alarm: Boolean = (percent
 }
 
 @Composable
-private fun QuotaSection(quota: List<Quota>, detail: Boolean) {
+private fun QuotaSection(status: Status, detail: Boolean) {
+    val quota = status.quota
     Section("KUOTA 9ROUTER", if (detail) "sisa 5 jam · 7 hari" else "sisa 5 jam") {
-        if (quota.isEmpty()) Text("memuat…", style = style(12, color = MUTED))
-        if (detail) {
+        if (quota.isEmpty()) {
+            val text = when (status.quotaState) {
+                QuotaState.LOADING -> "memuat…"; QuotaState.ERROR -> "– kuota error"
+                QuotaState.READY -> "tidak ada akun"; QuotaState.MISSING -> "–"
+            }
+            Text(text, style = style(12, color = MUTED))
+        } else if (detail) {
             quota.forEach { q -> QuotaRow(q) }
         } else {
+            // Three weighted two-line chips share the ~222 dp content width, so the percent never clips.
             Row(GlanceModifier.fillMaxWidth()) {
                 quota.forEachIndexed { i, q ->
                     if (i > 0) Spacer(GlanceModifier.width(6.dp))
-                    Box(GlanceModifier.background(TILE).cornerRadius(8.dp).padding(horizontal = 8.dp, vertical = 3.dp)) {
-                        Text("${Format.quotaName(q)} ${q.session?.let { "$it%" } ?: "–"}", style = style(11))
+                    Column(
+                        GlanceModifier.defaultWeight().background(TILE).cornerRadius(8.dp).padding(horizontal = 4.dp, vertical = 3.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(Format.provider(q), style = style(9, color = MUTED), maxLines = 1)
+                        Text(q.session?.let { "$it%" } ?: "–", style = style(12, bold = true), maxLines = 1)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun GitHub(c: Contrib?) {
+    val density = LocalContext.current.resources.displayMetrics.density
+    val widthPx = ((LocalSize.current.width.value - 28) * density).toInt()
+    val cell = (10 * density).toInt()
+    val gap = (2 * density).toInt().coerceAtLeast(1)
+    Section("GITHUB${c?.user?.let { " · $it" } ?: ""}", c?.let { Format.github(it) } ?: "") {
+        if (c == null) {
+            Text("–", style = style(12, color = MUTED))
+        } else {
+            Image(ImageProvider(Grid.bitmap(c.weeks, widthPx, cell, gap)), contentDescription = "Kontribusi GitHub",
+                contentScale = ContentScale.FillBounds,
+                modifier = GlanceModifier.fillMaxWidth().height((7 * 10 + 6 * 2).dp)
+                    .clickable(open("https://github.com/${c.user}")))
         }
     }
 }

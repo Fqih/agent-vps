@@ -52,4 +52,14 @@ class FormatTest {
         assertEquals("Gemini ×11", Format.quotaName(Quota("gemini", 11, 100, 92, null)))
         assertEquals("Claude", Format.quotaName(Quota("claude", 1, 57, 72, null)))
     }
+
+    @Test
+    fun chipNameHasNoAccountCount() {
+        assertEquals("Gemini", Format.provider(Quota("gemini", 11, 100, 92, null)))
+    }
+
+    @Test
+    fun githubSummary() {
+        assertEquals("4.393 setahun · streak 12 · hari ini 3", Format.github(Contrib("Fqih", 4393, 3, 12, emptyList())))
+    }
 }

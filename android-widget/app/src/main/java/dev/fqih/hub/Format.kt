@@ -37,6 +37,10 @@ object Format {
         listOfNotNull(uptimeDays?.let { "up $it hari" }, load?.let { "load %.2f".format(java.util.Locale.ROOT, it) })
             .joinToString(" · ")
 
-    fun quotaName(q: Quota): String =
-        q.name.replaceFirstChar { it.uppercase() } + if (q.accounts > 1) " ×${q.accounts}" else ""
+    fun provider(q: Quota): String = q.name.replaceFirstChar { it.uppercase() }
+
+    fun quotaName(q: Quota): String = provider(q) + if (q.accounts > 1) " ×${q.accounts}" else ""
+
+    fun github(c: Contrib): String =
+        "%,d setahun · streak %d · hari ini %d".format(java.util.Locale.forLanguageTag("id"), c.total, c.streak, c.today)
 }

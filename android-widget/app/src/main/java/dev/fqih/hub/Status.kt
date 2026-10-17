@@ -20,6 +20,10 @@ data class Vps(
 )
 /** Average remaining percent over a provider's active accounts. */
 data class Quota(val name: String, val accounts: Int, val session: Int?, val weekly: Int?, val reset: String?)
+/** MISSING: server sent no quota section; LOADING: first refresh still running; READY may hold zero accounts. */
+enum class QuotaState { MISSING, LOADING, ERROR, READY }
+/** GitHub contribution calendar: weeks oldest first, each Sun..Sat level 0-4, -1 for days not yet here. */
+data class Contrib(val user: String, val total: Int, val today: Int, val streak: Int, val weeks: List<List<Int>>)
 
 /** The Hub /status JSON. A section the server reports as {"error": ...} or omits is null. */
 data class Status(
@@ -31,6 +35,8 @@ data class Status(
     val vps: Vps?,
     val router: Map<String, String>,
     val quota: List<Quota> = emptyList(),
+    val quotaState: QuotaState = QuotaState.MISSING,
+    val github: Contrib? = null,
 ) {
     companion object {
         /** Throws org.json.JSONException when [raw] is not a JSON object. */
@@ -70,6 +76,15 @@ data class Status(
                         q.optJSONObject(name)?.let { Quota(name, it.optInt("accounts"), it.int("session"), it.int("weekly"), it.text("reset")) }
                     }
                 } ?: emptyList(),
+                quotaState = o.optJSONObject("quota")?.let { q ->
+                    when { q.has("error") -> QuotaState.ERROR; q.optBoolean("loading") -> QuotaState.LOADING; else -> QuotaState.READY }
+                } ?: QuotaState.MISSING,
+                github = o.section("github")?.let { g ->
+                    val weeks = g.optJSONArray("weeks")
+                    Contrib(g.optString("user"), g.optInt("total"), g.optInt("today"), g.optInt("streak"),
+                        (0 until (weeks?.length() ?: 0)).mapNotNull { weeks!!.optJSONArray(it) }
+                            .map { w -> (0 until w.length()).map { w.optInt(it, -1) } })
+                },
             )
         }
 

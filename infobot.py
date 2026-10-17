@@ -16,6 +16,7 @@ import time
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from html import escape
+from pathlib import Path
 
 import brief
 import monitor
@@ -28,6 +29,7 @@ from hub.collectors import vps as hub_vps
 from digest import DB_PATH, REPORT_DIR, WIB, jobs_env, load_env, model_config
 
 CHECK_EVERY = timedelta(minutes=5)
+IMAGE_DIR = Path.home() / "hub-inbox"
 DIGEST_DEADLINE = (7, 45)                   # WIB; the 07:00 digest normally lands by 07:02
 DAYTIME = range(8, 21)                     # WIB, no pings at night
 PRACTICE_HOUR = 9                          # daily interview question, WIB
@@ -257,9 +259,25 @@ def poll(name: str, env: dict, owner: int, on_message, on_callback, commands: li
                     on_callback(db, env, upd["callback_query"])
                 elif upd.get("message", {}).get("text"):
                     on_message(db, env, upd["message"]["text"])
+                elif "message" in upd:
+                    save_owner_image(env, upd["message"])
         except Exception:
             log.exception("%s loop error", name)
             time.sleep(10)
+
+
+def save_owner_image(env: dict, message: dict) -> bool:
+    """Screenshots the owner sends to a bot land in IMAGE_DIR for review. True when handled."""
+    try:
+        path = tg.save_image(env, message, IMAGE_DIR)
+    except Exception as err:  # never let one bad upload stop the poll loop
+        log.warning("save image: %s", err)
+        tg.send(env, f"Simpan gambar gagal: {escape(str(err))[:120]}")
+        return True
+    if path is None:
+        return False
+    tg.send(env, f"Gambar tersimpan: <code>{escape(path.name)}</code>")
+    return True
 
 
 def once(db: sqlite3.Connection, key: str, value: str) -> bool:

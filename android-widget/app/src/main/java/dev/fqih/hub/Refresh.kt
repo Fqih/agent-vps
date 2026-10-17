@@ -21,7 +21,12 @@ object Refresh {
     suspend fun run(context: Context) {
         val store = Store(context)
         val url = store.url() ?: return
-        store.saveFetch(withContext(Dispatchers.IO) { StatusFetcher.fetch(url) })
+        // Agenda first, so the status fetched right after already shows it. A failed push only
+        // means the Hub keeps the previous agenda; the status fetch reports any connection trouble.
+        store.saveFetch(withContext(Dispatchers.IO) {
+            PhoneAgenda.push(context, url)
+            StatusFetcher.fetch(url)
+        })
         HubWidget().updateAll(context)
     }
 

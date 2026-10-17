@@ -4,7 +4,10 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -57,6 +60,11 @@ private fun SettingsScreen(store: Store, done: () -> Unit) {
     var url by remember { mutableStateOf("") }
     var bot by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
+    var calendar by remember { mutableStateOf(PhoneAgenda.allowed(context)) }
+    val askCalendar = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        calendar = granted
+        message = if (granted) "Kalender HP diizinkan; agenda dikirim ke Hub tiap refresh." else "Izin kalender ditolak."
+    }
     LaunchedEffect(Unit) {
         url = store.url().orEmpty()
         bot = store.bot().orEmpty()
@@ -83,6 +91,9 @@ private fun SettingsScreen(store: Store, done: () -> Unit) {
             value = bot, onValueChange = { bot = it }, label = { Text("Link bot jobs (opsional, https://t.me/...)") },
             singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
+        OutlinedButton(onClick = { askCalendar.launch(Manifest.permission.READ_CALENDAR) }, enabled = !calendar) {
+            Text(if (calendar) "Kalender HP: aktif" else "Izinkan kalender HP")
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = {
                 val bad = problem()

@@ -26,9 +26,14 @@ apps" allowed for that app.
 2. Open **Hub**, tap "Tempel dari clipboard" after copying the STATUS URL
    from the ntfy message "URL widget Hub" (how to send it: `../docs/widget.md`), then "Tes koneksi", then
    "Simpan".
-3. Long-press the home screen, Widgets, Hub, place it, resize to 4x2 or
-   4x3+.
-4. HyperOS: Settings > Apps > Hub > Battery saver: **No restrictions**,
+3. Optional, for the agenda without Google OAuth: tap "Izinkan kalender
+   HP" and allow. On every refresh the app sends today's and tomorrow's
+   events (title and times only) from all calendars on the phone to the
+   Hub (`POST /agenda`, same token), which feeds the widget agenda, the
+   07:05 summary and the 1-hour reminders.
+4. Long-press the home screen, Widgets, Hub, place it, resize to 4x2 or
+   up to 4x7 (from 680 dp tall it adds the GitHub grid).
+5. HyperOS: Settings > Apps > Hub > Battery saver: **No restrictions**,
    and enable **Autostart**, so the 30-minute refresh is not killed.
 
 The ⟳ icon refreshes at once. Header shows the server time of the last

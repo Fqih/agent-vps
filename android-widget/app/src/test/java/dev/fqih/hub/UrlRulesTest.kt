@@ -35,6 +35,11 @@ class UrlRulesTest {
     }
 
     @Test
+    fun agendaKeepsToken() {
+        assertEquals("http://100.64.0.1:8090/agenda?token=abc", UrlRules.agenda(" http://100.64.0.1:8090/status?token=abc"))
+    }
+
+    @Test
     fun botLinkOptionalButHttps() {
         assertNull(UrlRules.botProblem(""))
         assertNull(UrlRules.botProblem("https://t.me/some_bot"))

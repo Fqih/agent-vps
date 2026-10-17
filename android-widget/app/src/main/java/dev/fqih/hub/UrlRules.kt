@@ -25,6 +25,9 @@ object UrlRules {
     /** hub-status serves the dashboard at / with the same token. Call only on a URL that passed [problem]. */
     fun dashboard(statusUrl: String): String = statusUrl.trim().replaceFirst("/status?", "/?")
 
+    /** The phone pushes its calendar here, same host and token. Call only on a URL that passed [problem]. */
+    fun agenda(statusUrl: String): String = statusUrl.trim().replaceFirst("/status?", "/agenda?")
+
     fun botProblem(raw: String): String? =
         if (raw.isBlank() || raw.trim().startsWith("https://")) null else "Link bot harus https://"
 }

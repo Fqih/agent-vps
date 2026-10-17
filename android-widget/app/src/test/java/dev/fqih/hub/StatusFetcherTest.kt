@@ -87,4 +87,13 @@ class StatusFetcherTest {
         server = null
         assertFalse(message(StatusFetcher.fetch(url, timeoutMs = 2_000))!!.contains("rahasia"))
     }
+
+    @Test
+    fun postReportsSuccessAndErrors() {
+        assertEquals(true, StatusFetcher.post(serve(204, ""), "{}").isSuccess)
+        stop()
+        assertEquals("token salah", StatusFetcher.post(serve(403, "forbidden"), "{}").exceptionOrNull()?.message)
+        stop()
+        assertEquals("HTTP 302", StatusFetcher.post(serve(302, "", "Location: http://evil.test/\r\n"), "{}").exceptionOrNull()?.message)
+    }
 }

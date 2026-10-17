@@ -221,7 +221,7 @@ private fun Agenda(today: Today?, max: Int) {
     Section("AGENDA HARI INI") {
         val items = today?.items.orEmpty()
         if (items.isEmpty()) {
-            val text = when (today?.calendar) { null -> "–"; "off" -> "Kalender belum login"; else -> "Agenda kosong" }
+            val text = when (today?.calendar) { null -> "–"; "off" -> "Kalender off · buka app, izinkan kalender"; else -> "Agenda kosong" }
             Text(text, style = style(12, color = MUTED), maxLines = 1)
         } else {
             items.take(max).forEach { item ->

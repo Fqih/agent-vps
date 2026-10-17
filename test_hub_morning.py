@@ -1,7 +1,10 @@
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest import mock
 
+from connectors import phonecal
 from connectors.google_auth import AuthError, TokenMissing
 from hub import morning
 
@@ -37,6 +40,26 @@ class Morning(unittest.TestCase):
     def test_soon_events_no_login_is_silent(self):
         with mock.patch("connectors.gcal.list_events", side_effect=TokenMissing("x")):
             self.assertEqual(morning.soon_events({}, NOW), ([], None))
+
+    def test_soon_events_from_phone_agenda(self):
+        path = Path(tempfile.mkdtemp()) / "phone-agenda.json"
+        start = (NOW + timedelta(minutes=30)).astimezone(timezone(timedelta(hours=7)))
+        phonecal.store(path, {"events": [{"id": "1:1", "title": "Rapat", "all_day": False,
+                       "start": start.isoformat(), "date": start.date().isoformat()}]}, NOW)
+        with mock.patch("connectors.gcal.list_events", side_effect=TokenMissing("x")):
+            events, err = morning.soon_events({"phone_agenda": path}, NOW)
+        self.assertEqual(([e["id"] for e in events], err), (["1:1"], None))
+
+    def test_stale_phone_agenda_still_reminds_and_reports(self):
+        path = Path(tempfile.mkdtemp()) / "phone-agenda.json"
+        then = NOW - timedelta(hours=30)
+        start = (NOW + timedelta(minutes=30)).astimezone(timezone(timedelta(hours=7)))
+        phonecal.store(path, {"events": [{"id": "1:1", "title": "Rapat", "all_day": False,
+                       "start": start.isoformat(), "date": start.date().isoformat()}]}, then)
+        with mock.patch("connectors.gcal.list_events", side_effect=TokenMissing("x")):
+            events, err = morning.soon_events({"phone_agenda": path}, NOW)
+        self.assertEqual([e["id"] for e in events], ["1:1"])
+        self.assertTrue(err.startswith("data kalender HP basi"))
 
     def test_soon_events_revoked_reports_error(self):
         with mock.patch("connectors.gcal.list_events", side_effect=AuthError("dicabut")):

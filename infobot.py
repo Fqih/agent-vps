@@ -305,8 +305,12 @@ def scheduled(db: sqlite3.Connection, jobs: dict, info: dict, state: dict) -> No
                 if once(db, f"event_remind:{ev['id']}", ev["start"]):
                     notify.publish(info, "alerts", f"{ev['time']} {ev['title']}", "Mulai dalam 1 jam", "high")
             if cal_error and once(db, "google_warn", today):
-                notify.publish(info, "jobs", "Login Google bermasalah",
-                               f"{cal_error}. Jalankan ulang connectors.google_auth login.")
+                if cal_error.startswith("data kalender HP"):
+                    notify.publish(info, "jobs", "Kalender HP belum kirim data",
+                                   f"{cal_error}. Buka app Hub, cek Tailscale, tekan ⟳.")
+                else:
+                    notify.publish(info, "jobs", "Login Google bermasalah",
+                                   f"{cal_error}. Jalankan ulang connectors.google_auth login.")
         except Exception:
             log.exception("calendar check")
 

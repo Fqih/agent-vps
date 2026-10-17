@@ -76,6 +76,12 @@ class Scheduled(unittest.TestCase):
         self.assertEqual(len(jobs), 1)
         self.assertIn("PT X", jobs[0].args[3])
 
+    def test_stale_phone_agenda_asks_to_open_app_not_google_login(self):
+        _, publish = self.tick(state_db(), soon=mock.Mock(return_value=([], "data kalender HP basi (30 jam)")))
+        titles = [c.args[2] for c in publish.call_args_list]
+        self.assertIn("Kalender HP belum kirim data", titles)
+        self.assertNotIn("Login Google bermasalah", titles)
+
     def test_calendar_crash_still_pings_healthcheck(self):
         ping, _ = self.tick(state_db(), soon=mock.Mock(side_effect=KeyError("refresh_token")))
         ping.assert_called_once_with("https://hc.test/ping")

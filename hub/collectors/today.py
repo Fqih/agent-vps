@@ -5,21 +5,28 @@ import urllib.error
 from contextlib import closing
 from datetime import datetime
 
-from connectors import gcal
+from connectors import gcal, phonecal
 from connectors.google_auth import AuthError, TokenMissing
 from hub.collectors.common import WIB, ro
 
 
-def collect(ctx: dict, now: datetime) -> dict:
-    items, calendar = [], "ok"
+def events(ctx: dict, now: datetime) -> tuple:
+    """Today's calendar events and the calendar label: Google when logged in, else the phone's push."""
+    day = now.astimezone(WIB).date()
     try:
         kwargs = {"token_fn": ctx["token_fn"]} if ctx.get("token_fn") else {}
-        for ev in gcal.list_events(now.astimezone(WIB).date(), **kwargs):
-            items.append({"time": ev["time"], "title": ev["title"], "kind": "event"})
+        return gcal.list_events(day, **kwargs), "ok"
     except TokenMissing:
-        calendar = "off"
+        phone = ctx.get("phone_agenda")
+        label = phonecal.state(phone, now) if phone else None
+        return (phonecal.list_events(phone, day), label) if label else ([], "off")
     except (AuthError, urllib.error.URLError, OSError, ValueError) as err:
-        calendar = f"error: {err}"[:80]
+        return [], f"error: {err}"[:80]
+
+
+def collect(ctx: dict, now: datetime) -> dict:
+    found, calendar = events(ctx, now)
+    items = [{"time": ev["time"], "title": ev["title"], "kind": "event"} for ev in found]
     with closing(ro(ctx["state_db"])) as db:
         rows = db.execute("SELECT title, company FROM jobs WHERE status IN ('dilamar', 'interview') "
                           "AND next_remind <= ? ORDER BY next_remind", (now.isoformat(),)).fetchall()

@@ -15,12 +15,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from digest import DB_PATH, REPORT_DIR, load_env
+from connectors import phonecal
 from hub import quota, tasks
 from hub.collectors import github, jobs, queue, router9, today, vps
 from hub.collectors.common import WIB
 
 PORT = 8090
 CACHE_SECONDS = 60
+MAX_BODY = 64 * 1024
 COLLECTORS = {"jobs": jobs.collect, "today": today.collect, "queue": queue.collect,
               "vps": vps.collect, "router": router9.collect, "quota": quota.collect,
               "github": github.collect}
@@ -62,7 +64,8 @@ def gather(ctx: dict, now: datetime, collectors: dict | None = None, clock=time.
 def make_ctx(env: dict) -> dict:
     home = Path.home()
     return {"env": env, "state_db": DB_PATH, "tasks_db": tasks.DB_PATH,
-            "router_db": home / "9router" / "data" / "db" / "data.sqlite", "backups": home / "backups"}
+            "router_db": home / "9router" / "data" / "db" / "data.sqlite", "backups": home / "backups",
+            "phone_agenda": home / ".hermes" / "phone-agenda.json"}
 
 
 PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
@@ -99,11 +102,35 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def do_GET(self):
-        url = urllib.parse.urlparse(self.path)
+    def _authorized(self, url) -> str | None:
+        """The given token when it matches STATUS_TOKEN, else None."""
         given = urllib.parse.parse_qs(url.query).get("token", [""])[0]
         expected = self.ctx["env"].get("STATUS_TOKEN", "")
-        if not expected or not hmac.compare_digest(given.encode(), expected.encode()):
+        ok = expected and hmac.compare_digest(given.encode(), expected.encode())
+        return given if ok else None
+
+    def do_POST(self):
+        """Phone app pushes the agenda it read from the phone's calendars."""
+        url = urllib.parse.urlparse(self.path)
+        if self._authorized(url) is None:
+            return self._send(403, "text/plain", "forbidden")
+        if url.path != "/agenda":
+            return self._send(404, "text/plain", "not found")
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > MAX_BODY:
+            return self._send(413, "text/plain", "too large")
+        try:
+            phonecal.store(self.ctx["phone_agenda"], json.loads(self.rfile.read(length)), datetime.now(timezone.utc))
+        except ValueError as err:  # JSONDecodeError is a ValueError too
+            return self._send(400, "text/plain", f"bad agenda: {err}"[:200])
+        _cache.pop("today", None)  # show the new agenda on the next /status
+        self.send_response(204)
+        self.end_headers()
+
+    def do_GET(self):
+        url = urllib.parse.urlparse(self.path)
+        given = self._authorized(url)
+        if given is None:
             return self._send(403, "text/plain", "forbidden")
         now = datetime.now(timezone.utc)
         if url.path == "/status":

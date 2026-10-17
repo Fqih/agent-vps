@@ -10,6 +10,7 @@ from unittest import mock
 
 import monitor
 import tracker
+from connectors import phonecal
 from connectors.google_auth import AuthError, TokenMissing
 from hub import history, tasks
 from hub.collectors import jobs, queue, router9, today, vps
@@ -77,6 +78,15 @@ class Collectors(unittest.TestCase):
     def test_no_token_is_off_not_error(self):
         with mock.patch("connectors.gcal.list_events", side_effect=TokenMissing("x")):
             self.assertEqual(today.collect(self.ctx, NOW)["calendar"], "off")
+
+    def test_phone_agenda_used_without_google_login(self):
+        self.ctx["phone_agenda"] = Path(tempfile.mkdtemp()) / "phone-agenda.json"
+        phonecal.store(self.ctx["phone_agenda"], {"events": [{"id": "1:1", "title": "Rapat", "all_day": False,
+                       "start": "2026-10-16T13:00:00+07:00", "date": "2026-10-16"}]}, NOW)
+        with mock.patch("connectors.gcal.list_events", side_effect=TokenMissing("x")):
+            out = today.collect(self.ctx, NOW)
+        self.assertEqual(out["items"][0], {"time": "13:00", "title": "Rapat", "kind": "event"})
+        self.assertTrue(out["calendar"].startswith("hp · "))
 
     def test_revoked_token_is_error(self):
         with mock.patch("connectors.gcal.list_events", side_effect=AuthError("dicabut")):

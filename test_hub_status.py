@@ -71,7 +71,8 @@ class Http(unittest.TestCase):
         db.close()
 
     def serve(self, token):
-        ctx = {"env": {"STATUS_TOKEN": token}, "tasks_db": self.tasks_db}
+        self.agenda = self.tasks_db.parent / "phone-agenda.json"
+        ctx = {"env": {"STATUS_TOKEN": token}, "tasks_db": self.tasks_db, "phone_agenda": self.agenda}
         collectors = {"vps": lambda ctx, now: OK["vps"]}
         patcher = mock.patch.object(status, "COLLECTORS", collectors)
         patcher.start()
@@ -103,6 +104,29 @@ class Http(unittest.TestCase):
         data = json.loads(body)
         self.assertEqual(code, 200)
         self.assertEqual((data["vps"], data["level"]), (OK["vps"], "ok"))
+
+    def post(self, url, body: bytes):
+        req = urllib.request.Request(url, body, {"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return resp.status
+        except urllib.error.HTTPError as err:
+            return err.code
+
+    def test_agenda_post_stores_events(self):
+        base = self.serve("rahasia")
+        event = {"id": "1:1", "title": "Rapat", "start": "2026-10-16T13:00:00+07:00", "date": "2026-10-16",
+                 "all_day": False}
+        self.assertEqual(self.post(f"{base}/agenda?token=rahasia", json.dumps({"events": [event]}).encode()), 204)
+        self.assertEqual(json.loads(self.agenda.read_text())["events"][0]["title"], "Rapat")
+
+    def test_agenda_post_rejects_bad_requests(self):
+        base = self.serve("rahasia")
+        self.assertEqual(self.post(f"{base}/agenda?token=salah", b'{"events": []}'), 403)
+        self.assertEqual(self.post(f"{base}/agenda?token=rahasia", b"not json"), 400)
+        self.assertEqual(self.post(f"{base}/agenda?token=rahasia", b"x" * 70000), 413)
+        self.assertEqual(self.post(f"{base}/status?token=rahasia", b"{}"), 404)
+        self.assertFalse(self.agenda.exists())
 
     def test_dashboard_and_task_page_escape_html(self):
         base = self.serve("rahasia")

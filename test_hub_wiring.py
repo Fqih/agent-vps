@@ -53,6 +53,7 @@ class Scheduled(unittest.TestCase):
 
     def test_status_serves_quota(self):
         self.assertIn("quota", status.COLLECTORS)
+        self.assertIn("github", status.COLLECTORS)
 
     def test_monitor_alert_reaches_ntfy_when_telegram_fails(self):
         _, publish = self.tick(state_db(), alerts=["DOWN container:ntfy"], send_error=OSError("tg down"))

@@ -16,13 +16,14 @@ from pathlib import Path
 
 from digest import DB_PATH, REPORT_DIR, load_env
 from hub import quota, tasks
-from hub.collectors import jobs, queue, router9, today, vps
+from hub.collectors import github, jobs, queue, router9, today, vps
 from hub.collectors.common import WIB
 
 PORT = 8090
 CACHE_SECONDS = 60
 COLLECTORS = {"jobs": jobs.collect, "today": today.collect, "queue": queue.collect,
-              "vps": vps.collect, "router": router9.collect, "quota": quota.collect}
+              "vps": vps.collect, "router": router9.collect, "quota": quota.collect,
+              "github": github.collect}
 TOKEN_IN_URL = re.compile(r"token=[^&\s\"]*")
 LEVEL_ICON = {"ok": "🟢", "warn": "🟡", "crit": "🔴"}
 log = logging.getLogger("hub.status")

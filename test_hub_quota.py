@@ -61,6 +61,12 @@ class Malformed(unittest.TestCase):
         out = quota.summarize({"codex": [CODEX, None]})["codex"]
         self.assertEqual((out["accounts"], out["missing"], out["session"]), (2, 1, 97))
 
+    def test_non_finite_numbers_are_ignored(self):
+        weird = {"quotas": {"session": {"remainingPercentage": float("nan")},
+                            "weekly": {"remaining": float("inf"), "total": 100}}}
+        out = quota.summarize({"codex": [weird, CODEX]})["codex"]
+        self.assertEqual((out["session"], out["weekly"]), (97, 88))
+
     def test_reset_without_timezone_is_ignored(self):
         naive = {"quotas": {"session": {"remaining": 50, "total": 100, "resetAt": "2026-10-16T01:00:00"}}}
         self.assertEqual(quota.summarize({"codex": [naive, CODEX]})["codex"]["reset"], "18:23")

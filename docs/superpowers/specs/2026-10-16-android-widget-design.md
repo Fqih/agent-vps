@@ -61,7 +61,7 @@ Glance `SizeMode.Responsive` picks one of three layouts from the height:
 
 | Size | From | Shows |
 |---|---|---|
-| Small | 110 dp | header, 3 job tiles, Load/RAM/Disk bars, backup line |
+| Small | 140 dp | header, 3 job tiles, Load/RAM/Disk bars, backup line |
 | Medium | 330 dp | 5 job tiles, 2 agenda items, quota chips (5 h remaining), VPS bars |
 | Large (4x7) | 560 dp | adds 2 newest matches, 3 agenda items, last 3 tasks, quota rows (5 h and 7 day remaining, reset time), 6 h line charts for Load/RAM/Disk with current percent |
 

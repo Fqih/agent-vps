@@ -8,6 +8,7 @@ from __future__ import annotations
 import http.cookiejar
 import json
 import logging
+import math
 import urllib.request
 from contextlib import closing
 from datetime import datetime, timezone
@@ -26,7 +27,8 @@ _state: dict = {"value": None, "error": None}
 
 
 def _num(value) -> float | None:
-    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    ok = isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    return float(value) if ok else None
 
 
 def _remaining(q: dict) -> float | None:

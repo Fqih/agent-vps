@@ -1,7 +1,7 @@
 """Task kinds the worker knows. Each handler returns (text, model)."""
 from __future__ import annotations
 
-from hub import llm
+from hub import fillwork, llm
 
 
 def llm_prompt(task: dict, ctx: dict) -> tuple:
@@ -11,4 +11,5 @@ def llm_prompt(task: dict, ctx: dict) -> tuple:
     return llm.chat(task["chain"], messages, ctx["cfg"])
 
 
-HANDLERS = {"llm.prompt": llm_prompt}
+HANDLERS = {"llm.prompt": llm_prompt, "fill.job": fillwork.job, "fill.review": fillwork.review,
+            "fill.read": fillwork.read, "fill.question": fillwork.question}

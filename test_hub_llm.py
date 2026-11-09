@@ -103,10 +103,13 @@ class Chat(unittest.TestCase):
 
     def test_shipped_chains_avoid_claude_subscription(self):
         chains = llm.load_chains()
-        self.assertEqual(set(chains), {"bulk", "fast", "heavy"})
+        self.assertEqual(set(chains), {"bulk", "fast", "heavy", "gemini"})
         for models in chains.values():
             self.assertFalse(any(m.startswith("cc/") for m in models))
         self.assertFalse(any("claude" in m for m in chains["fast"] + chains["heavy"]))
+
+    def test_filler_chain_spends_gemini_only(self):
+        self.assertTrue(all(m.startswith("ag/gemini") for m in llm.load_chains()["gemini"]))
 
 
 if __name__ == "__main__":

@@ -6,8 +6,8 @@ import logging
 import time
 from datetime import datetime
 
-from digest import REPORT_DIR, load_env, model_config
-from hub import notify, tasks
+from digest import DB_PATH, REPORT_DIR, load_env, model_config
+from hub import filler, notify, tasks
 from hub.handlers import HANDLERS
 
 POLL_SECONDS = 5
@@ -32,7 +32,7 @@ def run_once(db, ctx: dict, now: datetime | None = None) -> bool:
         text, model = handler(task, ctx)
     except Exception as err:  # any handler error goes through the retry schedule
         log.warning("tugas #%s gagal: %s", task["id"], err)
-        if tasks.retry_or_fail(db, task["id"], str(err), now) == "failed":
+        if tasks.retry_or_fail(db, task["id"], str(err), now) == "failed" and task["payload"].get("notify", True):
             notify.publish(ctx["env"], "tasks", f"Gagal: {title}", str(err)[:300],
                            click=task_link(ctx, task["id"]))
         return True
@@ -46,12 +46,17 @@ def main() -> None:
     logging.basicConfig(filename=REPORT_DIR / "hub-worker.log", level=logging.INFO,
                         format="[%(asctime)s] %(levelname)s %(name)s %(message)s")
     env = load_env()
-    ctx = {"env": env, "cfg": model_config(env)}
+    ctx = {"env": env, "cfg": model_config(env), "state_db": DB_PATH}
     db = tasks.connect()
     log.info("worker jalan, %d tugas dikembalikan ke antrean", tasks.requeue_running(db))
+    last_fill = 0.0
     while True:
         try:
             if not run_once(db, ctx):
+                if time.monotonic() - last_fill >= filler.FILL_EVERY:
+                    last_fill = time.monotonic()  # set first: a crashing fill waits the full interval
+                    if filler.fill(db, ctx):
+                        last_fill = 0.0  # work was found: refill as soon as the queue drains
                 time.sleep(POLL_SECONDS)
         except Exception:
             log.exception("worker loop error")

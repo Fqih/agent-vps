@@ -16,6 +16,11 @@ def init(db: sqlite3.Connection) -> None:
     db.execute("""CREATE TABLE IF NOT EXISTS questions (
         id INTEGER PRIMARY KEY, topic TEXT, question TEXT NOT NULL, ideal TEXT,
         score INTEGER, due TEXT, created_at TEXT NOT NULL)""")
+    try:  # 'bank' = written ahead by the hub filler, served by /soal before generating
+        db.execute("ALTER TABLE questions ADD COLUMN source TEXT")
+    except sqlite3.OperationalError as err:
+        if "duplicate column" not in str(err):
+            raise
     db.commit()
 
 
@@ -27,6 +32,19 @@ def next_due(score: int, now: datetime) -> str:
 def due_question(db: sqlite3.Connection, now: datetime) -> tuple | None:
     return db.execute("SELECT id, topic, question FROM questions WHERE score < 8 AND due <= ? "
                       "ORDER BY due LIMIT 1", (now.isoformat(),)).fetchone()
+
+
+def bank_question(db: sqlite3.Connection, now: datetime) -> tuple | None:
+    """An unasked question the hub filler wrote ahead of time; marked asked once served."""
+    while True:
+        q = db.execute("SELECT id, topic, question FROM questions WHERE source = 'bank' AND due IS NULL "
+                       "ORDER BY id LIMIT 1").fetchone()
+        if q is None:
+            return None
+        claimed = db.execute("UPDATE questions SET due = ? WHERE id = ? AND due IS NULL", (now.isoformat(), q[0]))
+        db.commit()
+        if claimed.rowcount:  # another /soal thread may have taken it first
+            return q
 
 
 def new_question(db: sqlite3.Connection, cfg: dict) -> tuple:
@@ -49,7 +67,7 @@ Balas HANYA JSON: {{"question": "...", "ideal": "jawaban ideal ringkas, maks 80 
 def ask(db: sqlite3.Connection, cfg: dict, now: datetime) -> tuple[int, str]:
     q = due_question(db, now)
     repeat = q is not None
-    qid, topic, question = q if repeat else new_question(db, cfg)
+    qid, topic, question = q if repeat else bank_question(db, now) or new_question(db, cfg)
     label = "Ulangan" if repeat else "Soal baru"
     return qid, (f"<b>Latihan interview</b> ({label}, {escape(topic)})\n{escape(question)}\n\n"
                  "<i>Balas pesan ini dengan jawabanmu. /skip untuk lewati.</i>")

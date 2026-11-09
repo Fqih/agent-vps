@@ -124,15 +124,17 @@ def counts(db: sqlite3.Connection, now: datetime | None = None) -> dict:
     now = now or utcnow()
     live = {status: n for status, n in db.execute(
         "SELECT status, COUNT(*) FROM tasks WHERE status IN ('queued', 'running') GROUP BY status")}
-    failed = db.execute("SELECT COUNT(*) FROM tasks WHERE status = 'failed' AND finished_at >= ?",
+    failed = db.execute("SELECT COUNT(*) FROM tasks WHERE status = 'failed' AND kind NOT LIKE 'fill.%' "
+                        "AND finished_at >= ?",
                         (iso(now - timedelta(days=1)),)).fetchone()[0]
     return {"running": live.get("running", 0), "queued": live.get("queued", 0), "failed": failed}
 
 
-def recent(db: sqlite3.Connection, limit: int = 20) -> list:
+def recent(db: sqlite3.Connection, limit: int = 20, skip_filler: bool = False) -> list:
+    where = "WHERE kind NOT LIKE 'fill.%' " if skip_filler else ""
     rows = db.execute(
         "SELECT id, kind, status, model, created_at, finished_at, payload, "
-        "substr(coalesce(result, ''), 1, 200) AS preview, error FROM tasks ORDER BY id DESC LIMIT ?", (limit,))
+        f"substr(coalesce(result, ''), 1, 200) AS preview, error FROM tasks {where}ORDER BY id DESC LIMIT ?", (limit,))
     out = []
     for row in rows:
         item = dict(row)

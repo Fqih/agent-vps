@@ -1,5 +1,6 @@
 {
   "bulk": ["ag/gpt-oss-120b-medium", "ag/claude-sonnet-4-6", "ag/gemini-3.8-flash"],
   "fast": ["ag/gemini-3.8-flash-high", "ag/gemini-3.8-flash", "cx/gpt-6-luna"],
-  "heavy": ["ag/gemini-3.1-pro-high", "ag/gemini-3.8-flash-high", "cx/gpt-6.1-sol", "cx/gpt-6-luna"]
+  "heavy": ["ag/gemini-3.1-pro-high", "ag/gemini-3.8-flash-high", "cx/gpt-6.1-sol", "cx/gpt-6-luna"],
+  "gemini": ["ag/gemini-3.8-flash-high", "ag/gemini-3.8-flash", "ag/gemini-3.7-flash-high"]
 }

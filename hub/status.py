@@ -134,8 +134,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, "text/plain", "forbidden")
         now = datetime.now(timezone.utc)
         if url.path == "/status":
-            return self._send(200, "application/json; charset=utf-8",
-                              json.dumps(gather(self.ctx, now), ensure_ascii=False))
+            only_quota = urllib.parse.parse_qs(url.query).get("only") == ["quota"]  # hub filler polls this
+            body = gather(self.ctx, now, {"quota": quota.collect}) if only_quota else gather(self.ctx, now)
+            return self._send(200, "application/json; charset=utf-8", json.dumps(body, ensure_ascii=False))
         with closing(tasks.connect(self.ctx["tasks_db"])) as db:
             if url.path == "/":
                 return self._send(200, "text/html; charset=utf-8",

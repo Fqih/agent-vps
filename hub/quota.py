@@ -114,7 +114,9 @@ def fetch(ctx: dict) -> dict:
 
 def refresh_once(ctx: dict, fetch=fetch) -> None:
     try:
-        _state["value"], _state["error"] = summarize(fetch(ctx)), None
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        _state["value"] = {name: dict(v, at=stamp) for name, v in summarize(fetch(ctx)).items()}
+        _state["error"] = None
     except Exception as err:
         log.exception("quota refresh")
         _state["error"] = f"{type(err).__name__}: {err}"[:120]
